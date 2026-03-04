@@ -1,8 +1,8 @@
 # 🪞 Mirror — Universal Adaptive Multi-Agent Framework
 
-A production-ready, domain-agnostic **4-layer multi-agent classification pipeline** built for the **Reply Mirror Challenge**.
+A production-ready, domain-agnostic **N-stage multi-agent classification pipeline** built for the **Reply Mirror Challenge**.
 
-The system ingests heterogeneous data described by a `manifest.json`, classifies entities as:
+The system ingests heterogeneous data described by a `manifest.json`, processes N stages of cumulative training + evaluation, and classifies entities as:
 
 | Label | Meaning |
 |-------|---------|
@@ -18,15 +18,16 @@ The system ingests heterogeneous data described by a `manifest.json`, classifies
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                  manifest.json                          │
-│   (temporal / spatial / profile / context sources)      │
+│   N stages: [train₁,eval₁] → [train₂,eval₂] → ...     │
 └──────────────────────┬──────────────────────────────────┘
                        ▼
-              ┌─────────────────┐
-              │  DossierBuilder  │  ← merges all sources per entity
-              └────────┬────────┘
+          ┌─────────────────────────┐
+          │  Cumulative Training    │  stages 0..i accumulated
+          │  DossierBuilder         │
+          └────────────┬────────────┘
                        ▼
-         ┌─────────────────────────┐
-         │  Feature Engineering    │  ← sliding windows, spatial stats
+         ┌──────────────────────────┐
+         │  Feature Engineering    │  sliding windows, spatial stats
          └────────────┬────────────┘
                       ▼
         ┌──────────────────────────┐
@@ -45,13 +46,17 @@ The system ingests heterogeneous data described by a `manifest.json`, classifies
                     │ Orchestrator │
                     └──────┬───────┘
                            ▼
-                        OUTPUT
+                        OUTPUT → predictions_{stage}.txt
                            │
                     ┌──────▼───────┐
                     │ Layer 3 —    │  ChromaDB: stores errors
-                    │ Local RAG    │  for continuous learning
+                    │ Local RAG    │  for next stage's few-shot
                     └──────────────┘
 ```
+
+### Cumulative Training
+
+Each stage `i` trains on **all data from stages 0..i**, then evaluates on stage `i`'s evaluation data. Errors are stored in RAG and used as few-shot examples in subsequent stages.
 
 ---
 
@@ -101,118 +106,86 @@ cp .env.example .env
 | `FN_COST` | `5.0` | False Negative cost weight |
 | `TOP_K_RAG` | `3` | Number of RAG few-shot examples |
 
-### 3. Prepare your manifest
+### 3. Configure manifest.json
 
-Edit `manifest.json` to point to your data files. Each source includes semantic metadata:
+The manifest defines **N stages**, each with training and evaluation data sources:
 
 ```json
 {
-    "sources": [
+    "stages": [
         {
-            "path": "status.csv",
-            "role": "temporal",
-            "id_column": "CitizenID",
-            "format": "csv",
-            "description": "Longitudinal health events recorded at clinical touchpoints.",
-            "columns": {
-                "CitizenID": "8-char alphanumeric citizen identifier (join key)",
-                "EventType": "Event type: routine check-up, emergency visit, specialist consultation, etc.",
-                "PhysicalActivityIndex": "0-100 activity level. Declining trends signal sedentary drift.",
-                "SleepQualityIndex": "0-100 sleep quality. Drops correlate with stress or health issues.",
-                "EnvironmentalExposureLevel": "0-100 environmental risk. Rising values = worsening conditions.",
-                "Timestamp": "ISO-8601 datetime of the event."
-            }
+            "name": "level_1",
+            "output_file": "predictions_lev1.txt",
+            "ground_truth": "",
+            "training_sources": [
+                {
+                    "path": "resources/training/public_lev_1/status 2.csv",
+                    "role": "temporal",
+                    "id_column": "CitizenID",
+                    "format": "csv",
+                    "description": "Level 1 training health events.",
+                    "columns": {
+                        "EventType": "Health event type",
+                        "PhysicalActivityIndex": "0-100 activity level"
+                    }
+                }
+            ],
+            "evaluation_sources": [
+                {
+                    "path": "resources/evaluation/public_lev_1/status_new.csv",
+                    "role": "temporal",
+                    "id_column": "CitizenID",
+                    "format": "csv",
+                    "description": "Level 1 evaluation health events."
+                }
+            ]
         },
         {
-            "path": "locations.json",
-            "role": "spatial",
-            "id_column": "user_id",
-            "format": "json",
-            "description": "GPS pings capturing mobility. Reduced diversity may signal withdrawal.",
-            "columns": {
-                "user_id": "Citizen identifier (maps to CitizenID)",
-                "lat": "Latitude (WGS84)", "lng": "Longitude (WGS84)",
-                "city": "Resolved city name", "timestamp": "ISO-8601 datetime"
-            }
-        },
-        {
-            "path": "users.json",
-            "role": "profile",
-            "id_column": "user_id",
-            "format": "json",
-            "description": "Static demographic profile: age, job, residence.",
-            "columns": {
-                "user_id": "Citizen identifier",
-                "birth_year": "Year of birth (compute age)",
-                "job": "Occupation", "residence": "Object with city, lat, lng"
-            }
-        },
-        {
-            "path": "personas.md",
-            "role": "context",
-            "id_column": "entity_id",
-            "format": "md",
-            "description": "Rich narrative descriptions of citizen lifestyle and health behaviors."
+            "name": "level_2",
+            "output_file": "predictions_lev2.txt",
+            "ground_truth": "",
+            "training_sources": ["..."],
+            "evaluation_sources": ["..."]
         }
     ]
 }
 ```
 
+**Each stage has:**
+| Field | Description |
+|-------|-------------|
+| `name` | Human-readable stage name |
+| `output_file` | Where predictions are written for this stage |
+| `ground_truth` | Optional path to labels (JSON/CSV/TXT) for L0 training + metrics |
+| `training_sources` | Data sources for cumulative training |
+| `evaluation_sources` | Data sources for prediction/evaluation |
+
+**Each source entry has:**
+| Field | Required | Description |
+|-------|----------|-------------|
+| `path` | ✅ | Relative path to data file (forward slashes, works on all OS) |
+| `role` | ✅ | One of `temporal`, `spatial`, `profile`, `context` |
+| `id_column` | ✅ | Name of the entity-ID column |
+| `format` | ✅ | One of `csv`, `json`, `md` |
+| `description` | ❌ | Semantic description injected into agent prompts |
+| `columns` | ❌ | `{"col_name": "what it means"}` — column definitions for agents |
+
+> **Scaling:** Add more stages by appending to the `stages` array. Works with 1, 3, 6, or any number of stages.
+
 ### 4. Run the pipeline
 
-The pipeline has **two modes**, controlled by the `--ground-truth` flag:
-
-#### Mode A: Train + Evaluate (development)
-
-Pass a ground-truth file to **train Layer 0** and **print metrics** at the end:
-
 ```bash
-# Ground truth as JSON: {"CITIZENID": 0_or_1, ...}
-python main.py -m manifest.json -g ground_truth.json -o predictions.txt
+# Run all stages defined in manifest.json
+python main.py -m manifest.json
 
-# Ground truth as TXT: one flagged-ID per line (those are label=1, rest=0)
-python main.py -m manifest.json -g flagged_ids.txt -o predictions.txt
-
-# Ground truth as CSV: id,label
-python main.py -m manifest.json -g labels.csv -o predictions.txt
-```
-
-**What happens:**
-1. Data loaded via `manifest.json` → entity dossiers built
-2. Features engineered (sliding windows, spatial stats)
-3. **L0 trained** on ground-truth labels (XGBoost/RandomForest)
-4. Each entity processed: L0 confident → instant verdict; uncertain → L1 swarm → L2 orchestrator
-5. `predictions.txt` written (flagged IDs only)
-6. **Evaluation report** printed (Confusion Matrix, F1, Value Recovery, Mirror Score)
-7. Errors stored in RAG (ChromaDB) for next run's few-shot learning
-
-#### Mode B: Inference only (submission)
-
-Without ground truth, L0 is untrained so all entities go through L1→L2:
-
-```bash
-python main.py -m manifest.json -o predictions.txt
-```
-
-#### Run per level
-
-```bash
-# Level 1
-python main.py -m manifest_lev1.json -o predictions_lev1.txt
-
-# Level 2
-python main.py -m manifest.json -g ground_truth_lev2.json -o predictions_lev2.txt
-
-# Level 3
-python main.py -m manifest_lev3.json -o predictions_lev3.txt
-```
-
-#### Extra flags
-
-```bash
 # Verbose logging
-python main.py -m manifest.json --log-level DEBUG -o predictions.txt
+python main.py -m manifest.json --log-level DEBUG
 ```
+
+**What happens per stage:**
+1. **Train:** Cumulative training data (stages 0..i) → build dossiers → engineer features → train L0
+2. **Evaluate:** Stage `i` evaluation data → predict (L0 → L1 → L2) → write `predictions_{stage}.txt`
+3. **Learn:** Errors stored in RAG for next stage's few-shot examples
 
 ### 5. Build submission archive
 
@@ -229,17 +202,17 @@ python build_submission.py
 |------|---------|
 | `main.py` | CLI entry point |
 | `settings.py` | Pydantic Settings (loads `.env`) |
-| `models.py` | Shared Pydantic data models |
-| `manifest_manager.py` | Loads and validates `manifest.json` |
+| `models.py` | Shared Pydantic data models (`Stage`, `Manifest`, `EntityDossier`, `AgentVerdict`) |
+| `manifest_manager.py` | Loads `manifest.json`, provides cumulative stage access |
 | `data_loader.py` | Multi-format file ingestion (CSV, JSON, MD) |
-| `dossier_builder.py` | Assembles unified entity dossiers |
+| `dossier_builder.py` | Assembles unified entity dossiers from source entries |
 | `feature_engineer.py` | Sliding-window feature extraction |
 | `layer0_router.py` | Layer 0 — XGBoost/RF deterministic router |
-| `agent_base.py` | Abstract LLM agent with retries |
-| `domain_swarm.py` | Layer 1 — Per-role domain agents |
+| `agent_base.py` | Abstract LLM agent with retries + JSON validation |
+| `domain_swarm.py` | Layer 1 — Per-role domain agents with semantic metadata |
 | `orchestrator.py` | Layer 2 — Smart model economic decider |
 | `rag_store.py` | Layer 3 — ChromaDB local RAG |
-| `pipeline.py` | Full pipeline orchestrator |
+| `pipeline.py` | N-stage cumulative pipeline orchestrator |
 | `metrics.py` | Evaluation (F1, Value Recovery, Mirror Score) |
 | `output_writer.py` | Generates challenge-compliant TXT output |
 | `prompt_loader.py` | Loads prompt templates from `prompts/` |
@@ -277,35 +250,9 @@ To adapt the framework to a different domain (e.g., financial fraud):
 
 ---
 
-## 📝 Semantic Manifest
-
-`manifest.json` supports optional **semantic metadata** for each data source:
-
-```json
-{
-    "sources": [
-        {
-            "path": "status.csv",
-            "role": "temporal",
-            "id_column": "CitizenID",
-            "format": "csv",
-            "description": "Longitudinal health events...",
-            "columns": {
-                "PhysicalActivityIndex": "0-100 activity level, declining trends signal sedentary drift",
-                "EventType": "Type of health event: emergency visit is a strong deviation indicator"
-            }
-        }
-    ]
-}
-```
-
-These descriptions are **injected into agent prompts** so the LLM understands what each column means — no more guessing.
-
----
-
 ## 📊 Output Format
 
-**`predictions.txt`** — One entity ID per line (ASCII), containing only entities classified as `1` (preventive support):
+**`predictions_{stage}.txt`** — One entity ID per line (ASCII), containing only entities classified as `1` (preventive support):
 
 ```
 QOHAQRQI
@@ -317,7 +264,7 @@ GGGZNWZD
 
 ## 🔬 Metrics
 
-At the end of each run (if ground truth is provided), the pipeline prints:
+At the end of each stage (if ground truth is provided), the pipeline prints:
 
 - **Confusion Matrix** (TP, FP, FN, TN)
 - **Precision, Recall, F1-Score**
@@ -330,6 +277,7 @@ At the end of each run (if ground truth is provided), the pipeline prints:
 ## 📋 Requirements
 
 - **Python** ≥ 3.10
+- **OS:** Windows, macOS, Linux (all paths handled via `pathlib`)
 - **Dependencies** (see `requirements.txt`):
   - `pydantic` + `pydantic-settings` — configuration & data validation
   - `pandas` + `numpy` — data manipulation
