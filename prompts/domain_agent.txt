@@ -1,0 +1,27 @@
+## Task
+Analyse the following **{role}** data for entity '{entity_id}' and decide whether the trajectory suggests *preventive support* (1) or *standard monitoring* (0).
+
+{semantic_section}
+### {role_title} Data
+```json
+{data_slice}
+```
+
+### Profile Summary
+```json
+{profile_json}
+```
+
+### Context
+{context}
+
+{rag_section}
+### Instructions
+- Look for deteriorating trends, anomalies, or warning signals.
+- Consider: declining physical activity, worsening sleep, increasing environmental exposure, emergency visits, specialist consultations.
+- A sharp DROP in PhysicalActivityIndex or SleepQualityIndex across events is a red flag.
+- EventTypes like 'emergency visit', 'specialist consultation', 'follow-up assessment' signal escalation.
+- Reduced mobility radius or sudden isolation patterns indicate withdrawal.
+- False Negatives (missing a person who needs help) are MUCH WORSE than False Positives.
+
+Respond with JSON: {"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}

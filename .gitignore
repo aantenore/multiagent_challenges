@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment & secrets
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vector DB
+chroma_db/
+
+# Output
+submission.zip
+predictions.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# mypy / ruff
+.mypy_cache/
+.ruff_cache/
+
+# MacOS artifacts inside data
+resources/**/__MACOSX/

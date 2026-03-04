@@ -1,0 +1,61 @@
+{
+    "sources": [
+        {
+            "path": "status.csv",
+            "role": "temporal",
+            "id_column": "CitizenID",
+            "format": "csv",
+            "description": "Longitudinal health events for each citizen, recorded at clinical or coaching touchpoints over time.",
+            "columns": {
+                "EventID": "Unique sequential event identifier",
+                "CitizenID": "8-char alphanumeric citizen identifier (join key)",
+                "EventType": "Type of health event: 'routine check-up', 'lifestyle coaching session', 'preventive screening', 'follow-up assessment', 'emergency visit', 'specialist consultation'. Emergency visits and specialist consultations are strong indicators of trajectory deviation.",
+                "PhysicalActivityIndex": "Numeric index (0-100) measuring physical activity level at this event. Declining trends signal sedentary drift.",
+                "SleepQualityIndex": "Numeric index (0-100) measuring sleep quality. Drops correlate with stress, shift-work disruption, or health issues.",
+                "EnvironmentalExposureLevel": "Numeric index (0-100) of environmental risk exposure (pollution, noise, hazardous conditions). Rising values indicate worsening living/working environment.",
+                "Timestamp": "ISO-8601 datetime of the event. Irregular spacing may indicate avoidance or crisis periods."
+            }
+        },
+        {
+            "path": "locations.json",
+            "role": "spatial",
+            "id_column": "user_id",
+            "format": "json",
+            "description": "GPS location pings capturing citizen mobility patterns. Dense local clusters indicate routine; outlier cities indicate travel. Declining location diversity or reduced mobility radius may signal withdrawal.",
+            "columns": {
+                "user_id": "8-char alphanumeric citizen identifier (join key, maps to CitizenID in status)",
+                "timestamp": "ISO-8601 datetime of the location ping",
+                "lat": "Latitude (WGS84 decimal degrees)",
+                "lng": "Longitude (WGS84 decimal degrees)",
+                "city": "Resolved city name from coordinates"
+            }
+        },
+        {
+            "path": "users.json",
+            "role": "profile",
+            "id_column": "user_id",
+            "format": "json",
+            "description": "Static demographic profile for each citizen. Provides baseline context: age (via birth_year), occupation, residence, and travel habits.",
+            "columns": {
+                "user_id": "8-char alphanumeric citizen identifier (join key)",
+                "first_name": "Citizen first name",
+                "last_name": "Citizen last name",
+                "birth_year": "Year of birth (used to compute age)",
+                "job": "Current occupation or employment status (Student, Retired, Office Clerk, etc.)",
+                "residence": "Nested object with city, lat, lng of primary residence",
+                "_persona": "(Lev1 only) Internal persona archetype tag",
+                "_country": "(Lev1 only) Country code",
+                "_travel_per_year": "(Lev1 only) Expected number of trips per year",
+                "_travel_distance_min": "(Lev1 only) Minimum travel distance in km",
+                "_travel_distance_max": "(Lev1 only) Maximum travel distance in km"
+            }
+        },
+        {
+            "path": "personas.md",
+            "role": "context",
+            "id_column": "entity_id",
+            "format": "md",
+            "description": "Rich narrative descriptions of each citizen's lifestyle, personality, health behaviors, mobility patterns, and social habits. Sections headed '## CITIZENID - Name' contain qualitative information crucial for understanding behavioral deviations that numeric data alone cannot capture. Key signals include: social withdrawal, appetite changes, sleep disruption mentions, skipped medical follow-ups, and declining activity narratives."
+        }
+    ]
+}

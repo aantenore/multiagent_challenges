@@ -1,0 +1,32 @@
+## Global Decision for Entity '{entity_id}'
+
+### Swarm Agent Verdicts
+{verdict_lines}
+
+### Entity Profile
+```json
+{profile_json}
+```
+
+### Context
+{context}
+
+### Engineered Features
+```json
+{features_json}
+```
+
+{rag_section}
+### Economic Framework
+- False Positive cost:  {fp_cost} units (wasted resources)
+- False Negative cost:  {fn_cost} units (irreversible harm)
+- FN is {fn_ratio:.0f}× worse than FP.
+
+### Instructions
+1. Weigh each agent's verdict by their confidence and domain relevance.
+2. Consider the asymmetric cost: err on the side of flagging (prediction=1) when uncertain.
+3. Look for consensus among agents — if multiple agents flag concerns, the evidence is strong.
+4. Even ONE strong signal (e.g., emergency visit, specialist consultation, sharp metric decline) should bias toward prediction=1.
+5. Provide your final prediction.
+
+Respond with JSON: {"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}

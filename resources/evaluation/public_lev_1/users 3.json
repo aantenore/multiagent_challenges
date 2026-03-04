@@ -1,0 +1,67 @@
+[
+    {
+        "user_id": "XGKWMOSD",
+        "first_name": "Dorota",
+        "last_name": "Hartmann",
+        "birth_year": 2048,
+        "job": "Digital Creator",
+        "residence": {
+            "city": "Rostock",
+            "lat": "54.0833",
+            "lng": "12.1333"
+        },
+        "description":"39-year-old Digital Creator based in Rostock (DE).\n  - Freelance; mostly works from home or small shared studios.\n  - Lives in a central district with easy access to cafés and coworking spaces.\n- Lifestyle & routine\n  - Sedentary work style with long hours at the computer for editing and content production.\n  - Mornings are relatively structured (emails, planning, light breakfast).\n  - Afternoons and evenings dedicated to creative work, with occasional short walks outside.\n  - Weekends used for groceries, house chores and occasional relaxed outings.\n- Mobility patterns\n  - Short, regular movements within Rostock between home, cafés and a few usual work spots.\n  - One or two rare trips outside the city during the year that appear as outliers in her trajectory.\n- Personality & social habits\n  - Quiet, routine-oriented and comfortable working alone.\n  - Prefers small groups over large crowded events.\n- Health-related behaviors\n  - Physical activity low-to-moderate, mostly walking between nearby locations.\n  - Sleep generally stable around 6.5–7.5 hours with occasional late work nights.\n  - Uses healthcare for routine check-ups and a few lifestyle coaching sessions focused on posture and breaks.\n  - Environmental exposure moderate, mainly typical urban roads and neighborhoods."
+    },
+    {
+        "user_id": "PPRLPGBN",
+        "first_name": "Laura",
+        "last_name": "Allen",
+        "birth_year": 2051,
+        "job": "Digital Creator",
+        "residence": {
+            "city": "Stoke-on-Trent",
+            "lat": "53.0255",
+            "lng": "-2.1761"
+        },
+        "description":"36-year-old Digital Creator based in Stoke-on-Trent (UK).\n  - Freelance; divides time between home, coworking spaces and on-site shoots.\n- Lifestyle & routine\n  - Creative lifestyle with mildly irregular hours depending on client projects.\n  - Some days start early for calls, other days extend late into the evening for editing.\n  - Weekends mix short trips for workshops or shoots with quieter days at home.\n- Mobility patterns\n  - Regular movements within Stoke-on-Trent between home, coworking spots and local clients.\n  - Occasional travel to other cities for short projects or events that appear as multi-day clusters in the data.\n- Personality & social habits\n  - Outgoing but selective; enjoys collaborating with other creatives while keeping time for focused solo work.\n  - Participates in local events, screenings and small creative meetups.\n- Health-related behaviors\n  - Physical activity moderate, alternating sedentary editing days with more active shoot days.\n  - Sleep quality generally good but fluctuates around tight deadlines.\n  - Uses healthcare mainly for routine check-ups and some coaching sessions on stress and work–life balance.\n  - Environmental exposure typical of a medium-sized city with occasional stays in quieter, more rural surroundings."
+    },
+    {
+        "user_id": "JRQFEALU",
+        "first_name": "Melissa",
+        "last_name": "Buchholz",
+        "birth_year": 2031,
+        "job": "Investor",
+        "residence": {
+            "city": "Hamburg",
+            "lat": "53.5500",
+            "lng": "10.0000"
+        },
+        "description":"56-year-old Investor based in Hamburg (DE).\n  - Frequently travels for meetings, conferences and site visits.\n- Lifestyle & routine\n  - Structured but intense schedule with back-to-back meetings, calls and document reviews.\n  - Plans her weeks ahead, reserving some time for light exercise and recovery.\n- Mobility patterns\n  - Dense activity within Hamburg, commuting between residential areas and business districts.\n  - Regular international trips that appear as compact clusters of locations in other cities.\n- Personality & social habits\n  - Pragmatic and decisive, comfortable with high responsibility and complex decisions.\n  - Social activity is often tied to business dinners and professional events rather than purely leisure.\n- Health-related behaviors\n  - Physical activity moderate, mostly walking in cities and occasional use of hotel or office fitness facilities.\n  - Sleep reasonably good but periodically disrupted by jet lag and late-night work.\n  - Relies on scheduled routine check-ups and a small number of targeted preventive screenings.\n  - Environmental exposure relatively high due to airports, major cities and heavy-traffic business areas."
+    },
+    {
+        "user_id": "GEVYDNWG",
+        "first_name": "Jacob",
+        "last_name": "Hensley",
+        "birth_year": 2056,
+        "job": "Ride-share Driver",
+        "residence": {
+            "city": "Tonawanda",
+            "lat": "43.0105",
+            "lng": "-78.8805"
+        },
+        "description":"31-year-old Ride-share Driver based in Tonawanda (US).\n  - Works mainly in the Buffalo–Tonawanda area.\n- Lifestyle & routine\n  - Highly irregular working hours, including late evenings and nights.\n  - Few fixed routines; off days are mostly used to catch up on sleep and personal errands.\n- Mobility patterns\n  - Intense local movements across the region, covering residential zones, nightlife areas and transport hubs.\n  - Location data shows long spans spent driving and waiting near busy pick-up points.\n  - No major long-distance trips during the more critical periods of the year.\n- Personality & social habits\n  - Friendly with passengers but quickly drained by constant interaction.\n  - Social life intermittent, often cancelled when feeling too tired after long shifts.\n- Health-related behaviors\n  - Physical activity low in structured terms, with long sedentary periods behind the wheel.\n  - Sleep highly irregular, alternating short nights and heavy recovery sleeps.\n  - Increasing use of healthcare over time, from routine check-ups to more frequent preventive screenings and coaching sessions triggered by fatigue and sleep issues.\n  - Environmental exposure high due to many hours spent in traffic, near major roads and nightlife districts."
+    },
+    {
+        "user_id": "WGKSHVHM",
+        "first_name": "Tania",
+        "last_name": "Gumprich",
+        "birth_year": 2057,
+        "job": "Delivery Worker",
+        "residence": {
+            "city": "Berlin",
+            "lat": "52.5200",
+            "lng": "13.4050"
+        },
+        "description":"30-year-old Delivery Worker based in Berlin (DE).\n  - Works mainly with bike or scooter deliveries.\n- Lifestyle & routine\n  - Very active daily routine with long hours spent moving between different parts of the city.\n  - Eating schedule sometimes irregular, with quick snacks during work and proper meals on rest days.\n- Mobility patterns\n  - Dense and wide coverage of Berlin, reflecting frequent deliveries across multiple neighborhoods.\n  - Occasional trips abroad or to distant regions that show up as short, intense clusters of locations.\n- Personality & social habits\n  - Energetic and sociable, enjoys discovering new corners of the city while working.\n  - Maintains a stable network of friends and colleagues and often joins local events.\n- Health-related behaviors\n  - Physical activity high and consistent due to the physical demands of the job.\n  - Sleep generally good, around 7–8 hours, with occasional disturbances in peak work periods.\n  - Uses healthcare for routine check-ups, occasional screenings for joint and back health, and some coaching on workload management and recovery.\n  - Environmental exposure medium-to-high, balancing traffic and weather conditions with regular time spent outdoors and in green areas."
+    }
+]

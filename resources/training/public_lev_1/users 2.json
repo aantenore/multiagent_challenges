@@ -1,0 +1,102 @@
+[
+    {
+        "_user_id": "BZQNNYZQ",
+        "_persona": "impiegato_classico",
+        "_country": "FR",
+        "_travel_per_year": 2,
+        "_travel_distance_min": 0,
+        "_travel_distance_max": 15000,
+        "_travel_population_min": 1000,
+        "_travel_population_max": 45000000,
+        "first_name": "Nathalie",
+        "last_name": "Bertin",
+        "birth_year": 2048,
+        "job": "Administrative Assistant",
+        "residence": {
+            "city": "Thiers",
+            "lat": "45.8572",
+            "lng": "3.5483"
+        },
+        "description": "39-year-old Administrative Assistant living in Thiers (FR).\n  - Works in a mid-sized local administration office; standard weekday schedule (08:30–17:30).\n- Lifestyle & routine\n  - Sedentary but structured: spends most days seated at a desk; walks to nearby bus/tram stops and does short errands on foot.\n  - Weekdays:\n    - 06:30–07:30 at home (breakfast, light stretching videos).\n    - Commute to central Thiers office; minimal transfers.\n    - Lunch breaks often at the same café or small supermarket close to the office.\n    - Evenings at home watching TV/series; in bed by ~23:00.\n  - Weekends: grocery shopping, occasional park walk with a friend; rarely does intense sports.\n- Mobility patterns\n  - Dense cluster around Thiers with consistent commuting-scale displacements.\n  - A single longer trip in the year to a foreign city (e.g., Noyabrsk) that appears as an outlier, likely a short business or training trip.\n  - Mobility radius usually <10–15 km from home; the long trip stands out as the only long-haul movement.\n- Personality & social habits\n  - Conscientious, methodical, likes predictable routines and planning.\n  - Social circle is small but stable (family + 2–3 close friends). Prefers quiet dinners or café meetups over nightlife.\n- Health-related behaviors\n  - Moderate physical activity: ~5–7k steps/day from commuting + errands; tries home stretching 2–3 times/week but often skips when tired.\n  - Sleep: fairly regular (6.5–7.5h/night), generally good quality except around stressful office deadlines and travel days.\n  - Preventive mindset: attends routine check-ups at the health center a few times per year; rarely needs unplanned screenings.\n  - Environmental exposure moderate: lives in a small city with limited pollution but daily route crosses a couple of busy roads."
+    },
+    {
+        "_user_id": "PSMTBOBH",
+        "_persona": "freelance_creativo",
+        "_country": "IT",
+        "_travel_per_year": 1,
+        "_travel_distance_min": 0,
+        "_travel_distance_max": 15000,
+        "_travel_population_min": 1000,
+        "_travel_population_max": 45000000,
+        "first_name": "Ivan",
+        "last_name": "Monaco",
+        "birth_year": 2050,
+        "job": "Digital Creator",
+        "residence": {
+            "city": "Padova",
+            "lat": "45.4064",
+            "lng": "11.8778"
+        },
+        "description": "37-year-old Digital Creator based in Padova (IT).\n  - Freelance; alternates between home studio, co-working spaces, and cafés.\n- Lifestyle & routine\n  - Nightlife-oriented, irregular schedule:\n    - Often wakes up late (09:30–10:30).\n    - Heavy computer use, long editing sessions, and streaming in the afternoon/evening.\n    - Frequently out at bars, live events, and late dinners.\n  - Weekends blur with weekdays: work and leisure mixed; occasionally pulls all-nighters to finish client projects.\n- Mobility patterns\n  - Dense coverage of central Padova with many short trips between cafés, studios, and creative hubs.\n  - A short international trip in early March (e.g., to Kokubunji in the Tokyo area) for a creative residency or client shoot, then a return to Padova.\n  - Movement is high but mostly within the urban radius; frequently active in the late evening and night.\n- Personality & social habits\n  - Extroverted, novelty-seeking, thrives on new places and people.\n  - Maintains a broad social network: collaborators, other creators, and local nightlife crowd.\n  - Tends to procrastinate health-related checks unless prompted by the app or relatives.\n- Health-related behaviors\n  - Physical activity is mixed:\n    - Many hours seated editing, but regular walking/cycling around the city.\n    - Occasional gym or outdoor shoot days with higher activity.\n  - Sleep is highly variable: some days 4–5h (after late-night work), others 9–10h to recover, with irregular bedtimes.\n  - Environmental exposure often elevated: nightlife districts, traffic-heavy central streets, and frequent indoor bar/club environments.\n  - Likely uses the health platform mostly for lifestyle coaching sessions plus a couple of preventive screenings after stretches of poor sleep and high exposure."
+    },
+    {
+        "_user_id": "DLAXTEHN",
+        "_persona": "impiegato_classico",
+        "_country": "US",
+        "_travel_per_year": 1,
+        "_travel_distance_min": 0,
+        "_travel_distance_max": 15000,
+        "_travel_population_min": 1000,
+        "_travel_population_max": 45000000,
+        "first_name": "Scott",
+        "last_name": "Carr",
+        "birth_year": 2006,
+        "job": "Retired",
+        "residence": {
+            "city": "Philadelphia",
+            "lat": "40.0077",
+            "lng": "-75.1339"
+        },
+        "description": "36-year-old IT Helpdesk Specialist based in Philadelphia (US).\n  - Works alternating shifts (morning, afternoon, evening).\n  - Lives in a central neighborhood with easy access to public transport.\n- Lifestyle & routine\n  - Schedule heavily influenced by shift rotations.\n  - Morning shifts require waking up very early and lead to early fatigue.\n  - Evening shifts end late, causing difficulty falling asleep.\n  - Low structured physical activity; prefers gaming and streaming.\n  - Weekends alternate between going out with friends and staying home to recover.\n- Mobility patterns\n  - Regular short-range movements: home → workplace → supermarket → cafés.\n  - No long-distance trips throughout the year.\n  - Periods of noticeably reduced mobility during sequences of late shifts or bad weather.\n- Personality & social habits\n  - Introverted but friendly; isolates himself when tired.\n  - Social life depends on available energy between shifts.\n  - Frequently orders food delivery after late work days.\n- Health-related behaviors\n  - Physical activity low and inconsistent, with long sedentary periods.\n  - Sleep irregular: insomnia after late shifts and early awakenings for morning shifts.\n  - Uses healthcare for routine check-ups, a few additional screenings during fatigue periods, and some coaching sessions suggested by the platform.\n  - Environmental exposure moderate-to-high due to working near traffic-heavy areas and commuting at peak hours."
+    },
+    {
+        "_user_id": "XPPIXLIO",
+        "_persona": "impiegato_classico",
+        "_country": "FR",
+        "_travel_per_year": 5,
+        "_travel_distance_min": 0,
+        "_travel_distance_max": 15000,
+        "_travel_population_min": 1000,
+        "_travel_population_max": 45000000,
+        "first_name": "Arnaude",
+        "last_name": "Leleu",
+        "birth_year": 2044,
+        "job": "Office Clerk",
+        "residence": {
+            "city": "Montigny-les-Metz",
+            "lat": "49.1006",
+            "lng": "6.1539"
+        },
+        "description": "43-year-old Office Clerk in Montigny-les-Metz (FR).\n  - Works for a regional service company; standard full-time contract.\n- Lifestyle & routine\n  - Heavy commuter, sports-active on schedule:\n    - Uses bus/tram or car for a 20–40 minute commute to a business district.\n    - Workday: 08:00–17:00 in office.\n    - Twice per week she goes to a local gym or indoor pool after work.\n    - Weekends: family time, occasional hikes or runs.\n- Mobility patterns\n  - Structured movements across Montigny-les-Metz consistent with home–office–gym–supermarket loops.\n  - A short trip abroad (e.g., to Ousseltia in Tunisia) appears as a 4–5 day break.\n- Personality & social habits\n  - Organized, dutiful, prefers planning ahead.\n  - Close family ties, stable friend group.\n- Health-related behaviors\n  - Moderate-to-high physical activity from commuting + gym.\n  - Stable 7–8h sleep.\n  - Mostly routine check-ups and occasional coaching.\n  - Moderate exposure along commuting corridors."
+    },
+    {
+        "_user_id": "IBCOFEPU",
+        "_persona": "studente_universitario",
+        "_country": "US",
+        "_travel_per_year": 3,
+        "_travel_distance_min": 0,
+        "_travel_distance_max": 15000,
+        "_travel_population_min": 1000,
+        "_travel_population_max": 45000000,
+        "first_name": "Haley",
+        "last_name": "Phillips",
+        "birth_year": 2066,
+        "job": "Student",
+        "residence": {
+            "city": "Buffalo",
+            "lat": "42.9018",
+            "lng": "-78.8487"
+        },
+        "description": "21-year-old university student in Buffalo (US).\n  - Lives in shared student housing.\n- Lifestyle & routine\n  - Student, sports-active, irregular schedule.\n  - Mix of lectures, labs, sports training, social life.\n- Mobility patterns\n  - Frequent movements around campus, sports facilities, cafés.\n  - Short travel to another city (e.g., Robertsville, NJ) during early April.\n- Personality & social habits\n  - Energetic, social, participates in clubs and study groups.\n- Health-related behaviors\n  - High physical activity due to sports.\n  - Sleep fluctuates with exams.\n  - Routine check-ups, coaching sessions, and occasional preventive screenings"
+    }
+]
