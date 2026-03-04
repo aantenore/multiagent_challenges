@@ -11,7 +11,6 @@ from pathlib import Path
 import pandas as pd
 
 from data_loader import load_file
-from manifest_manager import ManifestManager
 from models import EntityDossier, ManifestEntry
 
 logger = logging.getLogger(__name__)
@@ -20,9 +19,18 @@ logger = logging.getLogger(__name__)
 class DossierBuilder:
     """Build one :class:`EntityDossier` per unique entity ID."""
 
-    def __init__(self, manager: ManifestManager) -> None:
-        self._manager = manager
-        self._base_dir = manager.base_dir
+    def __init__(self, entries: list[ManifestEntry], base_dir: Path) -> None:
+        self._entries = entries
+        self._base_dir = base_dir
+
+    # ── Factory ─────────────────────────────────────────────────────────
+
+    @classmethod
+    def from_entries(
+        cls, entries: list[ManifestEntry], base_dir: Path
+    ) -> DossierBuilder:
+        """Create a builder from a raw list of ManifestEntry objects."""
+        return cls(entries, base_dir)
 
     # ── Public ──────────────────────────────────────────────────────────
 
@@ -40,7 +48,7 @@ class DossierBuilder:
             "context": context_frames,
         }
 
-        for entry in self._manager.manifest.sources:
+        for entry in self._entries:
             df = load_file(entry, self._base_dir)
             bucket = role_buckets.get(entry.role)
             if bucket is not None:
@@ -115,7 +123,6 @@ class DossierBuilder:
             mask = df[id_col].astype(str) == entity_id
             rows = df.loc[mask]
             for _, row in rows.iterrows():
-                # Use 'context_text' column if available, else join all str cols
                 if "context_text" in row.index:
                     parts.append(str(row["context_text"]))
                 else:

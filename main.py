@@ -2,8 +2,8 @@
 CLI entry point for the Mirror Pipeline.
 
 Usage:
-    python main.py --manifest manifest.json --output predictions.txt
-    python main.py --manifest manifest.json --ground-truth labels.json --output predictions.txt
+    python main.py -m manifest.json
+    python main.py -m manifest.json --log-level DEBUG
 """
 
 from __future__ import annotations
@@ -24,19 +24,7 @@ def main() -> None:
         "--manifest", "-m",
         type=str,
         default="manifest.json",
-        help="Path to manifest.json",
-    )
-    parser.add_argument(
-        "--ground-truth", "-g",
-        type=str,
-        default=None,
-        help="Optional ground-truth file (JSON, CSV, or TXT) for training L0 and evaluation",
-    )
-    parser.add_argument(
-        "--output", "-o",
-        type=str,
-        default="predictions.txt",
-        help="Output file for flagged entity IDs",
+        help="Path to manifest.json (contains N stages with train/eval sources)",
     )
     parser.add_argument(
         "--log-level",
@@ -61,16 +49,16 @@ def main() -> None:
 
     pipeline = AdaptivePipeline()
     try:
-        results = pipeline.run(
-            manifest_path=args.manifest,
-            ground_truth_path=args.ground_truth,
-            output_path=args.output,
-        )
-        flagged = sum(1 for r in results if r.final_prediction == 1)
-        Console().print(
-            f"\n[bold]Done.[/] {flagged}/{len(results)} entities flagged for "
-            f"preventive support → [cyan]{args.output}[/]"
-        )
+        stage_results = pipeline.run(manifest_path=args.manifest)
+
+        c = Console()
+        for stage_name, results in stage_results.items():
+            flagged = sum(1 for r in results if r.final_prediction == 1)
+            c.print(
+                f"  [bold]{stage_name}:[/] {flagged}/{len(results)} flagged"
+            )
+        c.print("\n[bold green]All stages complete.[/]")
+
     except Exception as exc:
         Console().print(f"[bold red]Pipeline failed:[/] {exc}")
         logging.exception("Pipeline failure")

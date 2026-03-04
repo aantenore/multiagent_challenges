@@ -1,6 +1,6 @@
 """
-ManifestManager — loads and validates the manifest.json file
-that describes every data source used by the pipeline.
+ManifestManager — loads and validates the manifest.json file.
+Supports N-stage train/eval pipelines with cumulative training.
 """
 
 from __future__ import annotations
@@ -9,13 +9,13 @@ import json
 import logging
 from pathlib import Path
 
-from models import Manifest, ManifestEntry
+from models import Manifest, ManifestEntry, Stage
 
 logger = logging.getLogger(__name__)
 
 
 class ManifestManager:
-    """Loads manifest.json, validates it, and groups entries by role."""
+    """Loads manifest.json and provides stage-aware access to entries."""
 
     def __init__(self, manifest_path: str | Path) -> None:
         self._path = Path(manifest_path)
@@ -31,21 +31,22 @@ class ManifestManager:
 
         raw = json.loads(self._path.read_text(encoding="utf-8"))
 
-        # Accept both {"sources": [...]} and bare [...]
+        # Accept both {"stages": [...]} / {"sources": [...]} / bare [...]
         if isinstance(raw, list):
             entries = [ManifestEntry(**item) for item in raw]
             self._manifest = Manifest(sources=entries)
-        elif isinstance(raw, dict) and "sources" in raw:
+        elif isinstance(raw, dict):
             self._manifest = Manifest(**raw)
         else:
             raise ValueError(
-                "manifest.json must be a list or an object with a 'sources' key"
+                "manifest.json must be a list or an object with 'stages' or 'sources'"
             )
 
+        stages = self._manifest.get_stages()
         logger.info(
-            "Manifest loaded: %d sources across roles %s",
-            len(self._manifest.sources),
-            sorted({e.role for e in self._manifest.sources}),
+            "Manifest loaded: %d stages — %s",
+            len(stages),
+            [s.name for s in stages],
         )
         return self._manifest
 
@@ -55,16 +56,21 @@ class ManifestManager:
             raise RuntimeError("Call .load() before accessing .manifest")
         return self._manifest
 
-    def entries_by_role(
-        self, role: str
-    ) -> list[ManifestEntry]:
-        """Return all manifest entries matching a given role."""
-        return [e for e in self.manifest.sources if e.role == role]
-
     @property
-    def roles(self) -> set[str]:
-        """Distinct roles present in the manifest."""
-        return {e.role for e in self.manifest.sources}
+    def stages(self) -> list[Stage]:
+        """Ordered list of stages."""
+        return self.manifest.get_stages()
+
+    def cumulative_training_sources(self, up_to_stage: int) -> list[ManifestEntry]:
+        """Return training sources accumulated from stage 0..up_to_stage (inclusive)."""
+        all_sources: list[ManifestEntry] = []
+        for stage in self.stages[: up_to_stage + 1]:
+            all_sources.extend(stage.training_sources)
+        return all_sources
+
+    def cumulative_training_roles(self, up_to_stage: int) -> set[str]:
+        """Distinct roles across all cumulative training sources."""
+        return {e.role for e in self.cumulative_training_sources(up_to_stage)}
 
     @property
     def base_dir(self) -> Path:

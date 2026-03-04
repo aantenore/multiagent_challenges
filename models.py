@@ -33,12 +33,59 @@ class ManifestEntry(BaseModel):
     )
 
 
-class Manifest(BaseModel):
-    """Top-level manifest wrapping a list of data sources."""
+class Stage(BaseModel):
+    """One train → eval stage in the pipeline.
 
-    sources: list[ManifestEntry] = Field(
-        default_factory=list, description="Data-source entries"
+    The manifest can contain N stages. During execution the pipeline
+    accumulates all training data from stage 0..i before evaluating stage i.
+    """
+
+    name: str = Field(..., description="Human-readable stage name, e.g. 'level_1'")
+    training_sources: list[ManifestEntry] = Field(
+        default_factory=list, description="Sources used to train on this stage"
     )
+    evaluation_sources: list[ManifestEntry] = Field(
+        default_factory=list, description="Sources used to predict/evaluate on this stage"
+    )
+    ground_truth: str = Field(
+        default="",
+        description="Optional path to ground-truth labels (JSON/CSV/TXT) for this stage",
+    )
+    output_file: str = Field(
+        default="",
+        description="Output predictions filename for this stage, e.g. 'predictions_lev1.txt'",
+    )
+
+
+class Manifest(BaseModel):
+    """Top-level manifest with N configurable stages.
+
+    Supports two layouts:
+    - **Staged** (recommended): ``{"stages": [...]}``.
+    - **Legacy flat**: ``{"sources": [...]}``, treated as a single unnamed stage.
+    """
+
+    stages: list[Stage] = Field(
+        default_factory=list, description="Ordered list of train/eval stages"
+    )
+    sources: list[ManifestEntry] = Field(
+        default_factory=list, description="Legacy flat source list (single-stage)"
+    )
+
+    def get_stages(self) -> list[Stage]:
+        """Return the stage list. Wraps legacy ``sources`` as a single stage."""
+        if self.stages:
+            return self.stages
+        if self.sources:
+            return [
+                Stage(
+                    name="default",
+                    training_sources=self.sources,
+                    evaluation_sources=self.sources,
+                    output_file="predictions.txt",
+                )
+            ]
+        return []
 
 
 # ── Entity Dossier ──────────────────────────────────────────────────────

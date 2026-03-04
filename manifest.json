@@ -1,61 +1,152 @@
 {
-    "sources": [
+    "stages": [
         {
-            "path": "status.csv",
-            "role": "temporal",
-            "id_column": "CitizenID",
-            "format": "csv",
-            "description": "Longitudinal health events for each citizen, recorded at clinical or coaching touchpoints over time.",
-            "columns": {
-                "EventID": "Unique sequential event identifier",
-                "CitizenID": "8-char alphanumeric citizen identifier (join key)",
-                "EventType": "Type of health event: 'routine check-up', 'lifestyle coaching session', 'preventive screening', 'follow-up assessment', 'emergency visit', 'specialist consultation'. Emergency visits and specialist consultations are strong indicators of trajectory deviation.",
-                "PhysicalActivityIndex": "Numeric index (0-100) measuring physical activity level at this event. Declining trends signal sedentary drift.",
-                "SleepQualityIndex": "Numeric index (0-100) measuring sleep quality. Drops correlate with stress, shift-work disruption, or health issues.",
-                "EnvironmentalExposureLevel": "Numeric index (0-100) of environmental risk exposure (pollution, noise, hazardous conditions). Rising values indicate worsening living/working environment.",
-                "Timestamp": "ISO-8601 datetime of the event. Irregular spacing may indicate avoidance or crisis periods."
-            }
+            "name": "level_1",
+            "output_file": "predictions_lev1.txt",
+            "ground_truth": "",
+            "training_sources": [
+                {
+                    "path": "resources/training/public_lev_1/status 2.csv",
+                    "role": "temporal", "id_column": "CitizenID", "format": "csv",
+                    "description": "Level 1 training health events.",
+                    "columns": {
+                        "EventID": "Unique event identifier",
+                        "CitizenID": "8-char citizen ID (join key)",
+                        "EventType": "Event type: routine check-up, lifestyle coaching, preventive screening, follow-up, emergency visit, specialist consultation",
+                        "PhysicalActivityIndex": "0-100 activity level",
+                        "SleepQualityIndex": "0-100 sleep quality",
+                        "EnvironmentalExposureLevel": "0-100 environmental risk",
+                        "Timestamp": "ISO-8601 datetime"
+                    }
+                },
+                {
+                    "path": "resources/training/public_lev_1/locations 2.json",
+                    "role": "spatial", "id_column": "user_id", "format": "json",
+                    "description": "Level 1 training GPS pings.",
+                    "columns": {"user_id": "Citizen ID", "timestamp": "ISO-8601", "lat": "Latitude", "lng": "Longitude", "city": "City name"}
+                },
+                {
+                    "path": "resources/training/public_lev_1/users 2.json",
+                    "role": "profile", "id_column": "user_id", "format": "json",
+                    "description": "Level 1 training demographic profiles.",
+                    "columns": {"user_id": "Citizen ID", "birth_year": "Year of birth", "job": "Occupation", "residence": "Object with city, lat, lng"}
+                }
+            ],
+            "evaluation_sources": [
+                {
+                    "path": "resources/evaluation/public_lev_1/status_new.csv",
+                    "role": "temporal", "id_column": "CitizenID", "format": "csv",
+                    "description": "Level 1 evaluation health events."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_1/locations 3.json",
+                    "role": "spatial", "id_column": "user_id", "format": "json",
+                    "description": "Level 1 evaluation GPS pings."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_1/users 3.json",
+                    "role": "profile", "id_column": "user_id", "format": "json",
+                    "description": "Level 1 evaluation profiles."
+                }
+            ]
         },
         {
-            "path": "locations.json",
-            "role": "spatial",
-            "id_column": "user_id",
-            "format": "json",
-            "description": "GPS location pings capturing citizen mobility patterns. Dense local clusters indicate routine; outlier cities indicate travel. Declining location diversity or reduced mobility radius may signal withdrawal.",
-            "columns": {
-                "user_id": "8-char alphanumeric citizen identifier (join key, maps to CitizenID in status)",
-                "timestamp": "ISO-8601 datetime of the location ping",
-                "lat": "Latitude (WGS84 decimal degrees)",
-                "lng": "Longitude (WGS84 decimal degrees)",
-                "city": "Resolved city name from coordinates"
-            }
+            "name": "level_2",
+            "output_file": "predictions_lev2.txt",
+            "ground_truth": "",
+            "training_sources": [
+                {
+                    "path": "resources/training/public_lev_2/public_lev_2/status.csv",
+                    "role": "temporal", "id_column": "CitizenID", "format": "csv",
+                    "description": "Level 2 training health events."
+                },
+                {
+                    "path": "resources/training/public_lev_2/public_lev_2/locations.json",
+                    "role": "spatial", "id_column": "user_id", "format": "json",
+                    "description": "Level 2 training GPS pings."
+                },
+                {
+                    "path": "resources/training/public_lev_2/public_lev_2/users.json",
+                    "role": "profile", "id_column": "user_id", "format": "json",
+                    "description": "Level 2 training profiles."
+                },
+                {
+                    "path": "resources/training/public_lev_2/public_lev_2/personas.md",
+                    "role": "context", "id_column": "entity_id", "format": "md",
+                    "description": "Level 2 training persona narratives with behavioral and health context."
+                }
+            ],
+            "evaluation_sources": [
+                {
+                    "path": "resources/evaluation/public_lev_2/public_lev_2/status.csv",
+                    "role": "temporal", "id_column": "CitizenID", "format": "csv",
+                    "description": "Level 2 evaluation health events."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_2/public_lev_2/locations.json",
+                    "role": "spatial", "id_column": "user_id", "format": "json",
+                    "description": "Level 2 evaluation GPS pings."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_2/public_lev_2/users.json",
+                    "role": "profile", "id_column": "user_id", "format": "json",
+                    "description": "Level 2 evaluation profiles."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_2/public_lev_2/personas.md",
+                    "role": "context", "id_column": "entity_id", "format": "md",
+                    "description": "Level 2 evaluation persona narratives."
+                }
+            ]
         },
         {
-            "path": "users.json",
-            "role": "profile",
-            "id_column": "user_id",
-            "format": "json",
-            "description": "Static demographic profile for each citizen. Provides baseline context: age (via birth_year), occupation, residence, and travel habits.",
-            "columns": {
-                "user_id": "8-char alphanumeric citizen identifier (join key)",
-                "first_name": "Citizen first name",
-                "last_name": "Citizen last name",
-                "birth_year": "Year of birth (used to compute age)",
-                "job": "Current occupation or employment status (Student, Retired, Office Clerk, etc.)",
-                "residence": "Nested object with city, lat, lng of primary residence",
-                "_persona": "(Lev1 only) Internal persona archetype tag",
-                "_country": "(Lev1 only) Country code",
-                "_travel_per_year": "(Lev1 only) Expected number of trips per year",
-                "_travel_distance_min": "(Lev1 only) Minimum travel distance in km",
-                "_travel_distance_max": "(Lev1 only) Maximum travel distance in km"
-            }
-        },
-        {
-            "path": "personas.md",
-            "role": "context",
-            "id_column": "entity_id",
-            "format": "md",
-            "description": "Rich narrative descriptions of each citizen's lifestyle, personality, health behaviors, mobility patterns, and social habits. Sections headed '## CITIZENID - Name' contain qualitative information crucial for understanding behavioral deviations that numeric data alone cannot capture. Key signals include: social withdrawal, appetite changes, sleep disruption mentions, skipped medical follow-ups, and declining activity narratives."
+            "name": "level_3",
+            "output_file": "predictions_lev3.txt",
+            "ground_truth": "",
+            "training_sources": [
+                {
+                    "path": "resources/training/public_lev_3/public_lev_3/status.csv",
+                    "role": "temporal", "id_column": "CitizenID", "format": "csv",
+                    "description": "Level 3 training health events."
+                },
+                {
+                    "path": "resources/training/public_lev_3/public_lev_3/locations.json",
+                    "role": "spatial", "id_column": "user_id", "format": "json",
+                    "description": "Level 3 training GPS pings."
+                },
+                {
+                    "path": "resources/training/public_lev_3/public_lev_3/users.json",
+                    "role": "profile", "id_column": "user_id", "format": "json",
+                    "description": "Level 3 training profiles."
+                },
+                {
+                    "path": "resources/training/public_lev_3/public_lev_3/personas.md",
+                    "role": "context", "id_column": "entity_id", "format": "md",
+                    "description": "Level 3 training persona narratives."
+                }
+            ],
+            "evaluation_sources": [
+                {
+                    "path": "resources/evaluation/public_lev_3/public_lev_3/status.csv",
+                    "role": "temporal", "id_column": "CitizenID", "format": "csv",
+                    "description": "Level 3 evaluation health events."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_3/public_lev_3/locations.json",
+                    "role": "spatial", "id_column": "user_id", "format": "json",
+                    "description": "Level 3 evaluation GPS pings."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_3/public_lev_3/users.json",
+                    "role": "profile", "id_column": "user_id", "format": "json",
+                    "description": "Level 3 evaluation profiles."
+                },
+                {
+                    "path": "resources/evaluation/public_lev_3/public_lev_3/personas.md",
+                    "role": "context", "id_column": "entity_id", "format": "md",
+                    "description": "Level 3 evaluation persona narratives."
+                }
+            ]
         }
     ]
 }
