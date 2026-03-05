@@ -211,14 +211,17 @@ class OneClassRouter:
     ) -> tuple[AgentVerdict | None, float, DetectionMetadata]:
         """Return (AgentVerdict | None, complexity, DetectionMetadata).
 
-        - Inlier  → verdict=0 at zero LLM cost.
-        - Outlier → None (escalate to L1) with math details.
+        - Secure Inlier (0) → verdict=0 at zero LLM cost.
+        - Outlier or Uncertain → None (escalate to L1) with math details.
         """
         assert self._fitted, "Layer 0 MUST be fitted before prediction!"
 
         meta = self._build_metadata(entity_id, dossier)
+        cfg = get_settings()
 
-        if not meta.is_anomalous:
+        # Rule: Anomalies ALWAYS escalate to L1/L2.
+        # Only Non-Anomalous (0) cases with high confidence can skip.
+        if not meta.is_anomalous and meta.confidence > cfg.l0_upper_threshold:
             return AgentVerdict(
                 agent_name="L0_OneClassRouter",
                 prediction=0,
@@ -226,10 +229,12 @@ class OneClassRouter:
                 reasoning=meta.report,
             ), 0.0, meta
 
-        complexity = min(1.0, meta.confidence)
+        # Otherwise, force escalation (Outlier OR uncertain Inlier)
+        complexity = min(1.0, meta.confidence) if meta.is_anomalous else 0.5
         logger.info(
-            "  L0[%s] OUTLIER → escalating to L1: conf=%.2f, %s",
-            entity_id, meta.confidence, meta.report[:150],
+            "  L0[%s] %s (conf=%.2f) → escalating to L1",
+            entity_id, "OUTLIER" if meta.is_anomalous else "UNCERTAIN_INLIER",
+            meta.confidence
         )
         return None, complexity, meta
 

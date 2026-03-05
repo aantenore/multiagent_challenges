@@ -168,13 +168,13 @@ class AdaptivePipeline:
                     l0_v, complexity, meta = self._router.to_verdict(eid, dossier)
                     
                     if l0_v is not None: 
-                        # Branch A - Inlier (Healthy)
+                        # Branch A - Secure 0 (Healthy)
                         # ACTION: Create synthetic normality entry in RAG
-                        rag_content = f"BASELINE NORMALITY: Citizen {eid} shows standard physiological patterns. Verdict: 0 (Healthy)."
+                        rag_content = f"SYNTHETIC NORMALITY: Citizen {eid} shows standard physiological patterns. Verdict: 0 (Healthy)."
                         if self._rag.is_enabled:
                             self._rag.add_case(eid, rag_content, label=0)
                     else: 
-                        # Branch B - Outlier (Anomalous / Edge Case)
+                        # Branch B - Escalate (Anomalous or Uncertain)
                         # ACTION: Full escalation with RAG context from the same warm-up cycle
                         logger.info("  [Sequential Warm-up] Inspecting Expert Case: %s", eid)
                         
@@ -318,6 +318,27 @@ class AdaptivePipeline:
             detection_metadata=detection_meta,
         )
         verdicts.extend(swarm_consensus_list)
+
+        # Layer 1.5 — Unanimity Optimization
+        # If ALL L1 coordinators agree with 100% internal agreement, skip L2.
+        if swarm_consensus_list and not force_escalation:
+            first_pred = swarm_consensus_list[0].prediction
+            is_unanimous = all(
+                c.prediction == first_pred and c.agreement_ratio == 1.0 
+                for c in swarm_consensus_list
+            )
+            if is_unanimous:
+                logger.info(
+                    "  [L1_SKIP] Unanimous consensus (pred=%d) → skipping L2 Orchestrator",
+                    first_pred
+                )
+                return PipelineResult(
+                    entity_id=eid,
+                    session_id=session_id,
+                    final_prediction=first_pred,
+                    layer_decided="L1_Unanimous_Consensus",
+                    verdicts=verdicts,
+                )
 
         # Layer 2 — Global Orchestrator
         final_verdict = self._orchestrator.decide(
