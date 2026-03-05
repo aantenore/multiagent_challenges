@@ -341,14 +341,23 @@ class AdaptivePipeline:
                 )
 
         # Layer 2 — Global Orchestrator
-        # Optimization: Use cheap model if L1 agreement is very high (> 0.95)
-        avg_agreement = 0.0
+        # Optimization: Use cheap model if L1 weighted consensus agreement is very high (> 0.95)
+        weighted_agreement = 0.0
+        total_conf = 0.0
         if swarm_consensus_list:
-            avg_agreement = sum(c.agreement_ratio for c in swarm_consensus_list) / len(swarm_consensus_list)
+            for c in swarm_consensus_list:
+                weighted_agreement += c.agreement_ratio * c.confidence
+                total_conf += c.confidence
+            avg_weighted_agreement = weighted_agreement / total_conf if total_conf > 0 else 0.0
+        else:
+            avg_weighted_agreement = 0.0
         
-        model_cat = "cheap" if avg_agreement > 0.95 else "smart"
+        model_cat = "cheap" if avg_weighted_agreement > 0.95 else "smart"
         if model_cat == "cheap":
-            logger.info("  [L2_OPTIMIZATION] High L1 agreement (%.2f) → using cheap model for L2", avg_agreement)
+            logger.info(
+                "  [L2_OPTIMIZATION] High L1 weighted agreement (%.2f) → using cheap model for L2", 
+                avg_weighted_agreement
+            )
 
         final_verdict = self._orchestrator.decide(
             dossier, swarm_consensus_list, rag_examples,
