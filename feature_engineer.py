@@ -151,9 +151,10 @@ class SlidingWindowExtractor:
                     feats[f"{col}_acceleration"] = slope2 - slope1
 
             # ── Temporal Patterns (Hour/Day) ──
-            hours = series.index.hour
+            hours = pd.Series(series.index.hour)
             feats[f"{col}_hour_mean"] = float(hours.mean())
-            feats[f"{col}_weekend_ratio"] = float(sum(1 for d in series.index.dayofweek if d >= 5) / len(series))
+            is_weekend = series.index.dayofweek >= 5
+            feats[f"{col}_weekend_ratio"] = float(is_weekend.sum() / len(series))
 
             # ── Dynamic Sizing via ACF (Autocorrelation) ──
             # Re-sample smoothly to daily frequency to calculate ACF reliably if we have enough span
