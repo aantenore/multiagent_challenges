@@ -146,17 +146,17 @@ cp .env.example .env
 The architecture splits processing into high-volume data analysis (Layer 1 Swarms) and low-volume high-reasoning synthesis (Layer 2 Orchestrator). 
 
 - **Layer 1 (Per-Role Swarm Agents - "Cheap")**: Needs high throughput, fast JSON parsing, and good instruction following.
-  - **OpenAI:** `gpt-4o-mini` (Very fast, cheap, good JSON support).
+  - **OpenAI:** `gpt-5-mini` (Very fast, cheap, good JSON support).
   - **Gemini:** `gemini-3-flash-preview` (Fast, large context window).
 - **Layer 2 (Global Orchestrator - "Smart")**: Needs deep reasoning, consensus conflict resolution, and complex economic balancing.
-  - **OpenAI:** `o3-mini` (New fast reasoning model supporting structured JSON outputs) or `gpt-4.5-preview` for highly reliable instruction following.
+  - **OpenAI:** `gpt-5.2` (New fast reasoning model supporting structured JSON outputs) or highly reliable instruction following.
   - **Gemini:** `gemini-3.1-pro-preview` (Excellent reasoning and synthesis capabilities across multiple contexts).
 
 *Environment variables to set these:*
 | Variable | Default Fallback |
 |----------|-----------------|
-| `CHEAP_MODEL_NAME` | `gpt-4o-mini` |
-| `SMART_MODEL_NAME` | `gpt-4.5-preview` |
+| `CHEAP_MODEL_NAME` | `gpt-5-mini` |
+| `SMART_MODEL_NAME` | `gpt-5.2` |
 | `GEMINI_CHEAP_MODEL_NAME` | `gemini-3-flash-preview` |
 | `GEMINI_SMART_MODEL_NAME` | `gemini-3.1-pro-preview` |
 
