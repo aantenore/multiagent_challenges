@@ -24,4 +24,4 @@ You are the coordinator for the **{role}** data role, analysing entity '{entity_
 - Be specific in your reasoning about what data patterns led to your decision.
 - Rate your confidence honestly: high confidence only when data clearly supports the prediction.
 
-Respond with JSON: {"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}
+Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}

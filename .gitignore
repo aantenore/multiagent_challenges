@@ -21,9 +21,9 @@ env/
 *.swp
 *.swo
 
-# Vector DB & Logs
+# Logs & Outputs
 chroma_db/
-logs/
+runs/
 
 # Output
 submission.zip

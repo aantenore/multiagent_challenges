@@ -85,12 +85,16 @@ def _load_markdown(path: Path) -> pd.DataFrame:
     """
     text = path.read_text(encoding="utf-8")
 
-    # Try pipe-delimited table first
+    # Try pipe-delimited table first. We demand a real separator row
+    # like |---|---| to avoid false positives on standalone piped text.
+    lines = text.splitlines()
+    has_separator = any(re.search(r"\|\s*-+\s*\|", line) for line in lines)
+    
     table_lines = [
-        line for line in text.splitlines()
-        if "|" in line and not line.strip().startswith("|-")
+        line for line in lines
+        if "|" in line and not re.match(r"^\s*\|?[\s\-:]+\|?\s*$", line)
     ]
-    if len(table_lines) >= 2:
+    if has_separator and len(table_lines) >= 2:
         return _parse_pipe_table(table_lines)
 
     # Fallback: section-based parsing (personas.md style)

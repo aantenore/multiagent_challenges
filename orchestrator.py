@@ -108,7 +108,7 @@ class GlobalOrchestrator(BaseAgent):
             f"### Economic Framework\n"
             f"- FP cost: {self._fp_cost}, FN cost: {self._fn_cost}\n\n"
             f"Respond with JSON: "
-            f'{{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}'
+            f'{{{{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}}}'
         )
 
     @staticmethod

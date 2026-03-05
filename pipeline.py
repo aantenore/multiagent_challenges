@@ -67,7 +67,7 @@ class AdaptivePipeline:
     # ── Main entry point ────────────────────────────────────────────────
 
     @observe(name="pipeline_run")
-    def run(self, manifest_path: str | Path) -> dict[str, list[PipelineResult]]:
+    def run(self, manifest_path: str | Path, results_dir: Path | None = None) -> dict[str, list[PipelineResult]]:
         """Execute the full N-stage pipeline.
 
         Returns a dict mapping stage_name → list[PipelineResult].
@@ -96,7 +96,7 @@ class AdaptivePipeline:
 
         for idx, stage in enumerate(stages):
             console.rule(f"[bold yellow]Stage {idx + 1}/{len(stages)}: {stage.name}")
-            results = self._run_stage(manager, idx, stage)
+            results = self._run_stage(manager, idx, stage, results_dir=results_dir)
             all_results[stage.name] = results
 
         console.rule("[bold cyan]Pipeline Complete")
@@ -110,6 +110,7 @@ class AdaptivePipeline:
         manager: ManifestManager,
         stage_idx: int,
         stage: Stage,
+        results_dir: Path | None = None,
     ) -> list[PipelineResult]:
         """Process one stage: train cumulatively, then evaluate."""
         # ── 1. Cumulative training ─────────────────────────────────
@@ -174,7 +175,8 @@ class AdaptivePipeline:
 
         # ── 4. Write output ────────────────────────────────────────
         out_file = stage.output_file or f"predictions_{stage.name}.txt"
-        write_predictions(results, out_file)
+        out_path = results_dir / out_file if results_dir else Path(out_file)
+        write_predictions(results, out_path)
 
         # ── 5. Metrics (if ground truth) ───────────────────────────
         labels = self._load_ground_truth(stage, manager.base_dir)

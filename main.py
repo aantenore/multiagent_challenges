@@ -41,9 +41,15 @@ def main() -> None:
     import os
     from pathlib import Path
 
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / datetime.now().strftime("session_%Y%m%d_%H%M%S.log")
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = Path("runs") / f"run_{run_timestamp}"
+    log_dir = run_dir / "logs"
+    results_dir = run_dir / "results"
+    
+    log_dir.mkdir(parents=True, exist_ok=True)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_file = log_dir / "session.log"
 
     # Console handler respects --log-level
     console_handler = RichHandler(rich_tracebacks=True, console=Console(stderr=True))
@@ -67,7 +73,7 @@ def main() -> None:
 
     pipeline = AdaptivePipeline()
     try:
-        stage_results = pipeline.run(manifest_path=args.manifest)
+        stage_results = pipeline.run(manifest_path=args.manifest, results_dir=results_dir)
 
         c = Console()
         for stage_name, results in stage_results.items():

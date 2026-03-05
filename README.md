@@ -145,18 +145,20 @@ cp .env.example .env
 **Recommended Model Tuning:**
 The architecture splits processing into high-volume data analysis (Layer 1 Swarms) and low-volume high-reasoning synthesis (Layer 2 Orchestrator). 
 
-| Variable | Recommended (OpenAI) | Recommended (Gemini) | Description |
-|----------|---------|---------|-------------|
-| Cheap (L1) | `gpt-4o-mini` | `gemini-2.0-flash` | Layer 1 Swarm Agents (High volume, fast JSON parsing) |
-| Smart (L2) | `o3-mini` / `gpt-4o` | `gemini-2.5-pro` | Layer 2 Orchestrator (Deep reasoning, conflict resolution) |
+- **Layer 1 (Per-Role Swarm Agents - "Cheap")**: Needs high throughput, fast JSON parsing, and good instruction following.
+  - **OpenAI:** `gpt-5-mini` (Very fast, cheap, good JSON support).
+  - **Gemini:** `gemini-3-flash` (Fast, large context window).
+- **Layer 2 (Global Orchestrator - "Smart")**: Needs deep reasoning, consensus conflict resolution, and complex economic balancing.
+  - **OpenAI:** `gpt-5.2` (New fast reasoning model supporting structured JSON outputs) or highly reliable instruction following.
+  - **Gemini:** `gemini-3.1` (Excellent reasoning and synthesis capabilities across multiple contexts).
 
 *Environment variables to set these:*
 | Variable | Default Fallback |
-|----------|---------|
-| `CHEAP_MODEL_NAME` | `gpt-4o-mini` |
-| `SMART_MODEL_NAME` | `gpt-4o` |
-| `GEMINI_CHEAP_MODEL_NAME` | `gemini-2.0-flash` |
-| `GEMINI_SMART_MODEL_NAME` | `gemini-2.5-pro-exp-03-25` |
+|----------|-----------------|
+| `CHEAP_MODEL_NAME` | `gpt-5-mini` |
+| `SMART_MODEL_NAME` | `gpt-5.2` |
+| `GEMINI_CHEAP_MODEL_NAME` | `gemini-3-flash` |
+| `GEMINI_SMART_MODEL_NAME` | `gemini-3.1` |
 
 **Optional observability:**
 | Variable | Description |
@@ -254,9 +256,10 @@ python main.py -m manifest.json --log-level DEBUG
 **What happens per stage:**
 1. **Train:** Cumulative training data (stages 0..i) → build dossiers → engineer features → train L0
 2. **Evaluate:** Stage `i` evaluation data → predict (L0 → L1 coordinators → L2) → write `predictions_{stage}.txt`
-3. **Learn:** Errors stored in RAG for next stage's few-shot examples
+3. **Learn:** All evaluations stored in RAG for next stage's few-shot examples
 
 ### 5. Build submission archive
+
 
 ```bash
 python build_submission.py

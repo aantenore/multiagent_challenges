@@ -91,15 +91,10 @@ class BaseAgent(ABC):
                 )
                 if attempt == self.max_retries:
                     logger.error(
-                        "[%s] all retries exhausted — returning fallback",
+                        "[%s] all retries exhausted — raising final exception",
                         self.name,
                     )
-                    return AgentVerdict(
-                        agent_name=self.name,
-                        prediction=1,  # conservative: flag for review
-                        confidence=0.3,
-                        reasoning=f"Fallback after {self.max_retries} failures: {exc}",
-                    )
+                    raise
         # unreachable, but keeps mypy happy
         raise RuntimeError("Unreachable")  # pragma: no cover
 

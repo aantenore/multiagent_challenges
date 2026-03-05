@@ -24,4 +24,4 @@ Analyse the following **{role}** data for entity '{entity_id}' and decide whethe
 - Reduced mobility radius or sudden isolation patterns indicate withdrawal.
 - False Negatives (missing a person who needs help) are MUCH WORSE than False Positives.
 
-Respond with JSON: {"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}
+Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}
