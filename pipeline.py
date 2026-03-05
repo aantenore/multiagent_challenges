@@ -319,44 +319,42 @@ class AdaptivePipeline:
         )
         verdicts.extend(swarm_consensus_list)
 
-        # Layer 1.5 — Unanimity Optimization
-        # If ALL L1 coordinators agree with 100% internal agreement, skip L2.
-        if swarm_consensus_list and not force_escalation:
-            first_pred = swarm_consensus_list[0].prediction
-            is_unanimous = all(
-                c.prediction == first_pred and c.agreement_ratio == 1.0 
-                for c in swarm_consensus_list
-            )
-            if is_unanimous:
-                logger.info(
-                    "  [L1_SKIP] Unanimous consensus (pred=%d) → skipping L2 Orchestrator",
-                    first_pred
-                )
-                return PipelineResult(
-                    entity_id=eid,
-                    session_id=session_id,
-                    final_prediction=first_pred,
-                    layer_decided="L1_Unanimous_Consensus",
-                    verdicts=verdicts,
-                )
-
-        # Layer 2 — Global Orchestrator
-        # Optimization: Use cheap model if L1 weighted consensus agreement is very high (> 0.95)
-        weighted_agreement = 0.0
-        total_conf = 0.0
+        # ── Global Consensus Optimization ────────────────────────────────────
+        # Calculate Weighted Majority Strength to determine if L2 can be skipped or optimized.
+        weight_0 = 0.0
+        weight_1 = 0.0
         if swarm_consensus_list:
             for c in swarm_consensus_list:
-                weighted_agreement += c.agreement_ratio * c.confidence
-                total_conf += c.confidence
-            avg_weighted_agreement = weighted_agreement / total_conf if total_conf > 0 else 0.0
-        else:
-            avg_weighted_agreement = 0.0
+                role_weight = c.confidence * c.agreement_ratio
+                if c.prediction == 0:
+                    weight_0 += role_weight
+                else:
+                    weight_1 += role_weight
         
-        model_cat = "cheap" if avg_weighted_agreement > 0.95 else "smart"
+        total_weight = weight_0 + weight_1
+        consensus_strength = max(weight_0, weight_1) / total_weight if total_weight > 0 else 0.0
+        majority_prediction = 0 if weight_0 >= weight_1 else 1
+
+        # A. Full Skip (Layer 1.5)
+        if swarm_consensus_list and not force_escalation and consensus_strength >= cfg.l1_skip_threshold:
+            logger.info(
+                "  [L1_SKIP] High consensus strength (%.2f >= threshold %.2f) → skipping L2",
+                consensus_strength, cfg.l1_skip_threshold
+            )
+            return PipelineResult(
+                entity_id=eid,
+                session_id=session_id,
+                final_prediction=majority_prediction,
+                layer_decided="L1_High_Consensus_Skip",
+                verdicts=verdicts,
+            )
+
+        # B. Layer 2 Optimization (Dynamic Model Selection)
+        model_cat = "cheap" if consensus_strength >= cfg.l2_cheap_model_threshold else "smart"
         if model_cat == "cheap":
             logger.info(
-                "  [L2_OPTIMIZATION] High L1 weighted agreement (%.2f) → using cheap model for L2", 
-                avg_weighted_agreement
+                "  [L2_OPTIMIZATION] Moderate consensus strength (%.2f >= threshold %.2f) → using cheap model",
+                consensus_strength, cfg.l2_cheap_model_threshold
             )
 
         final_verdict = self._orchestrator.decide(

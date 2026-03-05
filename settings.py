@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     swarm_complexity_threshold: float = 0.4
     swarm_temp_spread: float = 0.50
 
+    # ── Optimization Thresholds ──────────────────────────────────────────
+    l1_skip_threshold: float = 1.0        # Skip L2 if L1 average agreement >= this
+    l2_cheap_model_threshold: float = 0.95 # Use cheap L2 if L1 weighted consensus >= this
+
     # ── RAG Configuration ───────────────────────────────────────────────
     rag_collection_name: str = "case_memory"
     top_k_rag: int = 5
