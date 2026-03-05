@@ -190,7 +190,7 @@ class AdaptivePipeline:
                     
                     progress.advance(warmup_task)
 
-            # SANITY CHECK: Predict on Train Set
+            # SANITY CHECK: Predict on Train Set (L0 ONLY to save cost)
             train_results: list[PipelineResult] = []
             with Progress(
                 SpinnerColumn(),
@@ -198,10 +198,28 @@ class AdaptivePipeline:
                 console=console,
             ) as progress:
                 sanity_task = progress.add_task(
-                    f"  {stage.name}: Sanity Predict (Train Set)…", total=len(train_dossiers)
+                    f"  {stage.name}: Sanity Predict (L0-Only)…", total=len(train_dossiers)
                 )
                 for dossier in train_dossiers.values():
-                    result = self._process_entity(dossier, coordinators, session_id=train_session_id)
+                    # Optimized: L0 only for sanity check
+                    l0_v, _, _ = self._router.to_verdict(dossier.entity_id, dossier)
+                    if l0_v is not None:
+                        result = PipelineResult(
+                            entity_id=dossier.entity_id,
+                            session_id=train_session_id,
+                            final_prediction=l0_v.prediction,
+                            layer_decided="L0_SanityCheck",
+                            verdicts=[l0_v],
+                        )
+                    else:
+                        # L0 flagged as anomaly, but we skip escalation to save cost
+                        result = PipelineResult(
+                            entity_id=dossier.entity_id,
+                            session_id=train_session_id,
+                            final_prediction=1,
+                            layer_decided="L0_SanityCheck_Flagged",
+                            verdicts=[],
+                        )
                     train_results.append(result)
                     progress.advance(sanity_task)
 
@@ -332,12 +350,3 @@ class AdaptivePipeline:
             layer_decided="L2_GlobalOrchestrator",
             verdicts=verdicts,
         )
-
-    # ── Helpers ─────────────────────────────────────────────────────────
-
-    def _build_l0_baselines(
-        self,
-        dossiers: dict[str, EntityDossier],
-    ) -> None:
-        self._router.build_baselines(dossiers)
-        console.print(f"  [green]✓ L0 baselines built on {len(dossiers)} entities[/]")
