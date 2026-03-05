@@ -167,14 +167,23 @@ class AdaptivePipeline:
                     # L0 identifies outliers in its own training set
                     l0_v, _, _ = self._router.to_verdict(eid, dossier)
                     
-                    if l0_v is None: # L0 escalated (edge case)
+                    if l0_v is not None: # L0 says Branch A - Inlier (Healthy)
+                        # ACTION: Save DIRECTLY the record in ChromaDB (RAG)
+                        if self._rag.is_enabled:
+                            summary = self._rag.summarise_dossier(dossier)
+                            # Template sintetico: "BASELINE NORMALITY: Citizen {id} shows standard physiological patterns. Verdict: 0 (Healthy). Features: {features_summary}."
+                            rag_content = f"BASELINE NORMALITY: Citizen {eid} shows standard physiological patterns. Verdict: 0 (Healthy). Features: {summary}"
+                            self._rag.add_case(eid, rag_content, label=0)
+                        
+                    else: # L0 says Branch B - Outlier (Anomalous / Edge Case)
                         logger.info("  [Warm-up] Inspecting RAG Edge Case: %s", eid)
-                        # Force escalation to L1/L2 to populate RAG
+                        # ACTION: Invia il record alla catena di valutazione completa (L1 + L2)
                         result = self._process_entity(dossier, coordinators, force_escalation=True, session_id=train_session_id)
                         
                         if self._rag.is_enabled:
                             summary = self._rag.summarise_dossier(dossier)
                             reasoning = result.verdicts[-1].reasoning if result.verdicts else "No reasoning."
+                            # CONTENUTO: Salva nel ChromaDB il verdetto finale dell'Orchestratore e reasoning
                             rag_content = f"[TRAINING_MEMO][Decision={result.final_prediction}] {summary}\nReasoning: {reasoning}"
                             self._rag.add_case(eid, rag_content, label=result.final_prediction)
                     
