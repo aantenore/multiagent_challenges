@@ -39,7 +39,7 @@ from layer0_router import OneClassRouter
 from manifest_manager import ManifestManager
 from models import EntityDossier, ManifestEntry, PipelineResult, Stage, SwarmConsensus
 from orchestrator import GlobalOrchestrator
-from output_writer import write_predictions, write_audit_log
+from output_writer import write_predictions, write_audit_log, write_audit_log_jsonl
 from rag_store import RAGStore
 from settings import get_settings
 
@@ -164,18 +164,28 @@ class AdaptivePipeline:
                 )
 
                 for eid, dossier in train_dossiers.items():
-                    # L0 identifies outliers in its own training set
-                    l0_v, _, _ = self._router.to_verdict(eid, dossier)
+                    # A. Predict L0
+                    l0_v, complexity, meta = self._router.to_verdict(eid, dossier)
                     
-                    if l0_v is None: # L0 escalated (edge case)
-                        logger.info("  [Warm-up] Inspecting RAG Edge Case: %s", eid)
-                        # Force escalation to L1/L2 to populate RAG
+                    if l0_v is not None: 
+                        # Branch A - Inlier (Healthy)
+                        # ACTION: Create synthetic normality entry in RAG
+                        rag_content = f"BASELINE NORMALITY: Citizen {eid} shows standard physiological patterns. Verdict: 0 (Healthy)."
+                        if self._rag.is_enabled:
+                            self._rag.add_case(eid, rag_content, label=0)
+                    else: 
+                        # Branch B - Outlier (Anomalous / Edge Case)
+                        # ACTION: Full escalation with RAG context from the same warm-up cycle
+                        logger.info("  [Sequential Warm-up] Inspecting Expert Case: %s", eid)
+                        
+                        # Note: _process_entity already performs the RAG query internally, 
+                        # picking up any entries added in previous iterations of this loop.
                         result = self._process_entity(dossier, coordinators, force_escalation=True, session_id=train_session_id)
                         
                         if self._rag.is_enabled:
                             summary = self._rag.summarise_dossier(dossier)
                             reasoning = result.verdicts[-1].reasoning if result.verdicts else "No reasoning."
-                            rag_content = f"[TRAINING_MEMO][Decision={result.final_prediction}] {summary}\nReasoning: {reasoning}"
+                            rag_content = f"[EXPERT_REASONING][Decision={result.final_prediction}] {summary}\nReasoning: {reasoning}"
                             self._rag.add_case(eid, rag_content, label=result.final_prediction)
                     
                     progress.advance(warmup_task)
@@ -245,13 +255,25 @@ class AdaptivePipeline:
                 progress.advance(eval_task)
 
         # ── 4. Write eval output & audit ───────────────────────────────────
-        out_file = stage.output_file or f"predictions_{stage.name}.txt"
-        out_path = results_dir / out_file if results_dir else Path(out_file)
-        write_predictions(eval_results, out_path)
-        
-        audit_file = f"audit_log_{stage.name}.json"
-        audit_path = results_dir / audit_file if results_dir else Path(audit_file)
-        write_audit_log(eval_results, audit_path)
+        if stage.name == "level_1":
+            stage_results_dir = Path("runs") / "level_1"
+            stage_results_dir.mkdir(parents=True, exist_ok=True)
+            out_file = "predictions_level_1.txt"
+            audit_file = "audit_log.jsonl"
+            
+            out_path = stage_results_dir / out_file
+            audit_path = stage_results_dir / audit_file
+            
+            write_predictions(eval_results, out_path)
+            write_audit_log_jsonl(eval_results, audit_path)
+        else:
+            out_file = stage.output_file or f"predictions_{stage.name}.txt"
+            out_path = results_dir / out_file if results_dir else Path(out_file)
+            write_predictions(eval_results, out_path)
+            
+            audit_file = f"audit_log_{stage.name}.json"
+            audit_path = results_dir / audit_file if results_dir else Path(audit_file)
+            write_audit_log(eval_results, audit_path)
 
         return eval_results
 

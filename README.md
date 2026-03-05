@@ -76,13 +76,17 @@ If the series is too short or irregular to find an ACF peak, it seamlessly falls
 
 ---
 
-### Layer 0 — IsolationForest One-Class Engine
+### Hybrid Knowledge Base — RAG Memory
 
-- **Fit phase (Single-Pass):** The Isolation Forest is instantiated and trained exactly ONCE per level, exclusively on that level's Training Set (which acts as the Class 0 mathematical baseline).
-- **RAG Warm-up Phase:** After fitting, L0 predicts on its own training set. Thanks to the `contamination="auto"` parameter, it identifies edge cases. These outliers are evaluated by the L1/L2 LLM chain, and their final resolutions are saved into **ChromaDB**. This transforms ambiguous training records into a "Long-Term Memory" (few-shot examples) for the agents.
-- **Evaluation phase:** The locked L0 model evaluates new incoming data.
-  - **Inlier** (inside boundary) → emit `pred=0` at zero LLM cost.
-  - **Outlier** (outside boundary) → escalate to L1 with `DetectionMetadata` (deviating features). The LLMs will now query the warmed-up RAG to cross-reference similar historical cases.
+The RAG store (**ChromaDB**) acts as the framework's "Long-Term Memory," but it follows a strict lifecycle:
+- **Phase 1: Population (Training Only):** During the warm-up cycle, the RAG is populated using a **Hybrid Knowledge** approach:
+    - **Baseline Normality (Branch A):** For mathematical inliers (L0=0), synthetic RAG entries are created at zero LLM cost ("The user is healthy").
+    - **Expert Reasoning (Branch B):** For anomalies (L0=1), the full LLM Swarm evaluates the case and saves its detailed analytical reasoning.
+- **Phase 2: Inference (Evaluation Only):** During the evaluation/prediction phase, the RAG is **locked (Read-Only)**. It provides the agents with historical benchmarks to reduce uncertainty and confirm decisions.
+
+### Sequential RAG Warm-up
+
+During the training phase, citizens are processed **sequentially**. This allows each subsequent evaluation to query and "learn" from the decisions (both synthetic and expert) made earlier in the same warm-up cycle. This strictly cumulative memory significantly reduces false positives by providing a rich context of what "normal" looks like across different profiles.
 
 ### Layer 1 — Anti-False-Positive Filter (LLM Agents)
 

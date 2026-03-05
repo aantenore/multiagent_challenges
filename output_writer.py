@@ -83,3 +83,34 @@ def write_audit_log(
     
     logger.info("Wrote audit log for %d entities to %s", len(results), out)
     return out
+def write_audit_log_jsonl(
+    results: list[PipelineResult],
+    output_path: str | Path,
+) -> Path:
+    """Write detailed audit log in JSONL format (one JSON object per line)."""
+    out = Path(output_path)
+    
+    lines = []
+    for r in results:
+        verdicts_data = []
+        for v in r.verdicts:
+            verdicts_data.append({
+                "agent_name": getattr(v, "agent_name", "Unknown"),
+                "prediction": v.prediction,
+                "confidence": v.confidence,
+                "reasoning": v.reasoning,
+            })
+            
+        line_data = {
+            "entity_id": r.entity_id,
+            "session_id": r.session_id,
+            "final_prediction": r.final_prediction,
+            "layer_decided": r.layer_decided,
+            "verdicts": verdicts_data
+        }
+        import json
+        lines.append(json.dumps(line_data, ensure_ascii=False))
+        
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    logger.info("Wrote audit log (JSONL) for %d entities to %s", len(results), out)
+    return out
