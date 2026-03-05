@@ -75,7 +75,7 @@ class GlobalOrchestrator(BaseAgent):
         rag_section = ""
         if rag_examples:
             cases = "\n".join(
-                f"  Case: true={ex.get('true_label')}, predicted={ex.get('predicted_label')} — {ex.get('summary', '')}"
+                f"  Case: predicted={ex.get('predicted_label')} — {ex.get('summary', '')}"
                 for ex in rag_examples
             )
             rag_section = f"### Past Error Cases\n{cases}\n\n"

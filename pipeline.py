@@ -40,7 +40,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from domain_swarm import RoleCoordinator, SwarmFactory
 from dossier_builder import DossierBuilder
 from feature_engineer import SlidingWindowExtractor
-from layer0_router import DeterministicRouter
+from layer0_router import AnomalyRouter
 from manifest_manager import ManifestManager
 from metrics import print_report
 from models import EntityDossier, ManifestEntry, PipelineResult, Stage, SwarmConsensus
@@ -58,7 +58,7 @@ class AdaptivePipeline:
 
     def __init__(self) -> None:
         self._cfg = get_settings()
-        self._router = DeterministicRouter()
+        self._router = AnomalyRouter()
         self._rag = RAGStore()
         self._extractor = SlidingWindowExtractor()
         self._orchestrator = GlobalOrchestrator()
@@ -71,7 +71,6 @@ class AdaptivePipeline:
         self,
         manifest_path: str | Path,
         results_dir: Path | None = None,
-        stop_layer: int = 2,
     ) -> dict[str, list[PipelineResult]]:
         """Execute the full N-stage pipeline.
 
@@ -101,7 +100,7 @@ class AdaptivePipeline:
 
         for idx, stage in enumerate(stages):
             console.rule(f"[bold yellow]Stage {idx + 1}/{len(stages)}: {stage.name}")
-            results = self._run_stage(manager, idx, stage, results_dir=results_dir, stop_layer=stop_layer)
+            results = self._run_stage(manager, idx, stage, results_dir=results_dir)
             all_results[stage.name] = results
 
         console.rule("[bold cyan]Pipeline Complete")
@@ -116,7 +115,6 @@ class AdaptivePipeline:
         stage_idx: int,
         stage: Stage,
         results_dir: Path | None = None,
-        stop_layer: int = 2,
     ) -> list[PipelineResult]:
         """Process one stage: train cumulatively, then evaluate."""
         # ── 1. Cumulative training ─────────────────────────────────
@@ -133,12 +131,9 @@ class AdaptivePipeline:
             for dossier in train_dossiers.values():
                 dossier.features = self._extractor.extract(dossier)
 
-            # Load ground truth and train L0
-            labels = self._load_ground_truth(stage, manager.base_dir)
-            if labels:
-                self._train_l0(train_dossiers, labels)
-            else:
-                console.print("  [dim]No ground truth for this stage — L0 untrained[/]")
+            # Build L0 baselines (unsupervised — no labels needed)
+            self._router.build_baselines(train_dossiers)
+            console.print(f"  [green]✓ L0 baselines built on {len(train_dossiers)} entities[/]")
 
         # ── 2. Evaluation ──────────────────────────────────────────
         eval_sources = stage.evaluation_sources
@@ -175,7 +170,7 @@ class AdaptivePipeline:
                 f"  {stage.name}: predicting…", total=len(eval_dossiers)
             )
             for dossier in eval_dossiers.values():
-                result = self._process_entity(dossier, coordinators, stop_layer)
+                result = self._process_entity(dossier, coordinators)
                 results.append(result)
                 progress.advance(task_id)
 
@@ -200,15 +195,14 @@ class AdaptivePipeline:
                     with open(metrics_path, "w", encoding="utf-8") as f:
                         json.dump(metrics_dict, f, indent=2)
 
-        # ── 6. Store all cases in RAG (Balanced Learning) ──────────
-        if labels and self._rag.is_enabled:
+        # ── 6. Store all cases in RAG (works with or without labels) ──
+        if self._rag.is_enabled:
             for r in results:
-                true_label = labels.get(r.entity_id)
-                if true_label is not None:
-                    summary = self._rag.summarise_dossier(eval_dossiers[r.entity_id])
-                    self._rag.add_case(
-                        r.entity_id, summary, true_label, r.final_prediction,
-                    )
+                summary = self._rag.summarise_dossier(eval_dossiers[r.entity_id])
+                true_label = labels.get(r.entity_id) if labels else None
+                self._rag.add_case(
+                    r.entity_id, summary, true_label, r.final_prediction,
+                )
 
         return results
 
@@ -218,20 +212,19 @@ class AdaptivePipeline:
         self,
         dossier: EntityDossier,
         coordinators: list[RoleCoordinator],
-        stop_layer: int = 2,
     ) -> PipelineResult:
         """Process a single entity through L0 → L1 coordinators → L2."""
         eid = dossier.entity_id
         verdicts = []
 
-        # Layer 0
-        l0_verdict, complexity = self._router.to_verdict(eid, dossier.features)
+        # Layer 0 — Hybrid Ensemble Anomaly Router
+        l0_verdict, complexity, detection_meta = self._router.to_verdict(eid, dossier)
         if l0_verdict is not None:
             verdicts.append(l0_verdict)
             return PipelineResult(
                 entity_id=eid,
                 final_prediction=l0_verdict.prediction,
-                layer_decided="L0_DeterministicRouter",
+                layer_decided="L0_HybridRouter",
                 verdicts=verdicts,
             )
 
@@ -244,21 +237,11 @@ class AdaptivePipeline:
         swarm_consensus_list = SwarmFactory.run_coordinators(
             coordinators, dossier, rag_examples,
             l0_complexity=complexity,
+            detection_metadata=detection_meta,
         )
         verdicts.extend(swarm_consensus_list)
 
-        if stop_layer <= 1:
-            # Aggregate swarm predictions (majority vote)
-            if not swarm_consensus_list:
-                pred = 0
-            else:
-                pred = 1 if sum(v.prediction for v in swarm_consensus_list) / len(swarm_consensus_list) > 0.5 else 0
-            return PipelineResult(
-                entity_id=eid,
-                final_prediction=pred,
-                layer_decided="L1_SwarmConsensus",
-                verdicts=verdicts,
-            )
+
 
         # Layer 2 — Global Orchestrator
         final_verdict = self._orchestrator.decide(
@@ -275,22 +258,12 @@ class AdaptivePipeline:
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
-    def _train_l0(
+    def _build_l0_baselines(
         self,
         dossiers: dict[str, EntityDossier],
-        labels: dict[str, int],
     ) -> None:
-        X: list[dict[str, float]] = []
-        y: list[int] = []
-        for eid, label in labels.items():
-            if eid in dossiers:
-                X.append(dossiers[eid].features)
-                y.append(label)
-        if len(set(y)) < 2:
-            console.print("  [yellow]⚠ Skipping L0 training: need ≥2 classes[/]")
-            return
-        self._router.fit(X, y)
-        console.print(f"  [green]✓ L0 trained on {len(X)} cumulative samples[/]")
+        self._router.build_baselines(dossiers)
+        console.print(f"  [green]✓ L0 baselines built on {len(dossiers)} entities[/]")
 
     @staticmethod
     def _load_ground_truth(stage: Stage, base_dir: Path) -> dict[str, int]:

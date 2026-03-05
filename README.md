@@ -30,10 +30,10 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
          │  Feature Engineering    │  sliding windows, spatial stats
          └────────────┬────────────┘
                       ▼
-        ┌──────────────────────────┐
-        │  Layer 0 — ML Router    │  XGBoost / RandomForest
-        │  + Complexity Score     │  High-confidence → instant verdict
-        └─────┬───────────┬───────┘
+         ┌──────────────────────────┐
+         │  Layer 0 — Anomaly Router │  Z-Score / IsolationForest
+         │  + Complexity Score       │  High-confidence → instant verdict
+         └─────┬───────────┬────────┘
        certain│           │uncertain + complexity_score
               ▼           ▼
            OUTPUT   ┌──────────────────────────────────┐
@@ -57,8 +57,8 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
                             OUTPUT → predictions_{stage}.txt
                                │
                     ┌──────────▼───────┐
-                    │  Layer 3 — RAG   │  ChromaDB: stores errors
-                    │  for next stage  │  for next stage's few-shot
+                     │  Layer 3 — RAG   │  ChromaDB: stores all cases
+                     │  for next stage  │  (self-supervised when no labels)
                     └──────────────────┘
 ```
 
@@ -73,6 +73,10 @@ Each `RoleCoordinator` **linearly scales** the number of agents based on case co
 | 1.0 | 5 (maximum) | Maximum uncertainty, full committee vote |
 
 Agents within a swarm use **staggered temperatures** for opinion diversity. Votes are aggregated via **confidence-weighted voting** into a `SwarmConsensus` with agreement ratio.
+
+### Parallel Execution
+
+Both **role coordinators** and **agents within each role** execute in parallel using `ThreadPoolExecutor`, maximising throughput and minimising wall-clock time.
 
 ### Cumulative Training
 
@@ -184,11 +188,18 @@ The architecture splits processing into high-volume data analysis (Layer 1 Swarm
 | `SWARM_COMPLEXITY_THRESHOLD` | `0.3` | Complexity below this → min agents |
 | `SWARM_TEMP_SPREAD` | `0.15` | Temperature variation between swarm agents |
 
+**Layer 0 — Hybrid Ensemble Anomaly Detection:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ANOMALY_THRESHOLD` | `2.5` | Z-score σ multiplier for univariate anomaly detection |
+| `MIN_HISTORICAL_SAMPLES` | `3` | Min temporal records for valid baseline |
+| `SIGMA_WEIGHT` | `0.6` | Weight for Z-Score detector in ensemble |
+| `FOREST_WEIGHT` | `0.4` | Weight for IsolationForest detector in ensemble |
+| `ANOMALY_THRESHOLD_FOREST` | `-0.1` | IsolationForest decision_function threshold |
+
 **Pipeline hyperparameters:**
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `L0_LOWER_THRESHOLD` | `0.15` | ML confidence below this → class 0 |
-| `L0_UPPER_THRESHOLD` | `0.85` | ML confidence above this → class 1 |
 | `WINDOW_SIZE` | `3` | Sliding window size for features |
 | `FP_COST` | `1.0` | False Positive cost weight |
 | `FN_COST` | `5.0` | False Negative cost weight |
@@ -280,7 +291,7 @@ python build_submission.py
 | `data_loader.py` | Multi-format file ingestion (CSV, JSON, MD) |
 | `dossier_builder.py` | Assembles unified entity dossiers from source entries |
 | `feature_engineer.py` | Sliding-window feature extraction |
-| `layer0_router.py` | Layer 0 — XGBoost/RF deterministic router + **complexity scoring** |
+| `layer0_router.py` | Layer 0 — **Unsupervised Anomaly Router** (Z-Score / IsolationForest) + complexity scoring |
 | `agent_base.py` | Abstract LLM agent with retries + JSON validation (uses modular provider) |
 | `domain_swarm.py` | Layer 1 — **RoleCoordinator** (dynamic swarm, weighted voting, consensus) |
 | `orchestrator.py` | Layer 2 — Smart model economic decider (reads `SwarmConsensus`) |
@@ -355,7 +366,7 @@ At the end of each stage (if ground truth is provided), the pipeline prints:
 - **Dependencies** (see `requirements.txt`):
   - `pydantic` + `pydantic-settings` — configuration & data validation
   - `pandas` + `numpy` — data manipulation
-  - `scikit-learn` + `xgboost` — ML models (Layer 0)
+  - `scikit-learn` + `scipy` — anomaly detection (Layer 0)
   - `openai` — OpenAI LLM API client
   - `google-genai` — Google Gemini LLM API client
   - `langfuse` — observability & tracing

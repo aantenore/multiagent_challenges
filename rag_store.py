@@ -63,12 +63,13 @@ class RAGStore:
         self,
         entity_id: str,
         dossier_summary: str,
-        true_label: int,
+        true_label: int | None,
         predicted_label: int,
     ) -> None:
         """Store an evaluated case for future few-shot retrieval.
 
-        Saves both correct classifications and errors to provide balanced examples.
+        Saves both labelled and unlabelled cases. When true_label is None
+        (no ground truth available), stores in self-supervised mode.
         """
         if not self._enabled or self._collection is None:
             return
@@ -77,7 +78,7 @@ class RAGStore:
             f"{entity_id}:{true_label}:{predicted_label}".encode()
         ).hexdigest()[:16]
 
-        is_error = true_label != predicted_label
+        is_error = (true_label != predicted_label) if true_label is not None else False
 
         self._collection.upsert(
             ids=[doc_id],
@@ -85,16 +86,21 @@ class RAGStore:
             metadatas=[
                 {
                     "entity_id": entity_id,
-                    "true_label": true_label,
+                    "true_label": true_label if true_label is not None else -1,
                     "predicted_label": predicted_label,
                     "is_error": is_error,
+                    "has_ground_truth": true_label is not None,
                     "summary": dossier_summary[:500],
                 }
             ],
         )
         logger.info(
-            "RAG: stored case for %s (true=%d, pred=%d, is_error=%s)",
-            entity_id, true_label, predicted_label, is_error
+            "RAG: stored case for %s (true=%s, pred=%d, is_error=%s) — collection count: %d",
+            entity_id,
+            str(true_label) if true_label is not None else "N/A",
+            predicted_label,
+            is_error,
+            self._collection.count(),
         )
         logger.debug(
             "RAG Payload for %s:\n%s", entity_id, dossier_summary

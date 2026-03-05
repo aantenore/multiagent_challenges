@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 try:
@@ -119,8 +120,7 @@ class DomainAgent(BaseAgent):
         lines = ["### Historical Similar Cases (few-shot)\n"]
         for i, ex in enumerate(examples, 1):
             lines.append(
-                f"**Case {i}** (true_label={ex.get('true_label')}, "
-                f"predicted={ex.get('predicted_label')}): "
+                f"**Case {i}** (predicted={ex.get('predicted_label')}): "
                 f"{ex.get('summary', 'N/A')}\n"
             )
         lines.append("")
@@ -234,19 +234,26 @@ class RoleCoordinator:
         spread = self._cfg.swarm_temp_spread
         agents = self._spawn_agents(n_agents, base_temp, spread)
 
-        # Run all agents
+        # Run all agents IN PARALLEL
         verdicts: list[AgentVerdict] = []
-        for agent in agents:
-            verdict = agent.analyze(dossier, rag_examples)
-            verdicts.append(verdict)
-            logger.info(
-                "    [%s] → pred=%d  conf=%.2f",
-                agent.name, verdict.prediction, verdict.confidence,
-            )
-            logger.debug(
-                "    [%s] Reasoning: %s",
-                agent.name, verdict.reasoning,
-            )
+
+        def _run_agent(agent: DomainAgent) -> AgentVerdict:
+            return agent.analyze(dossier, rag_examples)
+
+        with ThreadPoolExecutor(max_workers=n_agents) as pool:
+            futures = {pool.submit(_run_agent, agent): agent for agent in agents}
+            for future in as_completed(futures):
+                agent = futures[future]
+                verdict = future.result()
+                verdicts.append(verdict)
+                logger.info(
+                    "    [%s] → pred=%d  conf=%.2f",
+                    agent.name, verdict.prediction, verdict.confidence,
+                )
+                logger.debug(
+                    "    [%s] Reasoning: %s",
+                    agent.name, verdict.reasoning,
+                )
 
         # Aggregate
         return self._aggregate(verdicts, complexity)
@@ -383,17 +390,24 @@ class SwarmFactory:
         dossier: EntityDossier,
         rag_examples: list[dict] | None = None,
         l0_complexity: float = 1.0,
+        detection_metadata: Any = None,
     ) -> list[SwarmConsensus]:
-        """Run all coordinators on a single entity and collect consensus verdicts."""
+        """Run all coordinators IN PARALLEL and collect consensus verdicts."""
+        def _run_coord(coord: RoleCoordinator) -> SwarmConsensus:
+            return coord.run(dossier, rag_examples, l0_complexity)
+
         results: list[SwarmConsensus] = []
-        for coord in coordinators:
-            consensus = coord.run(dossier, rag_examples, l0_complexity)
-            results.append(consensus)
-            logger.info(
-                "  [%s] → pred=%d  agreement=%.0f%%  N=%d",
-                coord.role, consensus.prediction,
-                consensus.agreement_ratio * 100, consensus.n_agents,
-            )
+        with ThreadPoolExecutor(max_workers=len(coordinators)) as pool:
+            futures = {pool.submit(_run_coord, coord): coord for coord in coordinators}
+            for future in as_completed(futures):
+                coord = futures[future]
+                consensus = future.result()
+                results.append(consensus)
+                logger.info(
+                    "  [%s] → pred=%d  agreement=%.0f%%  N=%d",
+                    coord.role, consensus.prediction,
+                    consensus.agreement_ratio * 100, consensus.n_agents,
+                )
         return results
 
     # ── Legacy compatibility ────────────────────────────────────────────

@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     fp_cost: float = 1.0
     fn_cost: float = 5.0
 
+    # ── Layer 0 Anomaly Detection ────────────────────────────────────────
+    anomaly_threshold: float = 2.5
+    min_historical_samples: int = 3
+    detection_algorithm: str = "hybrid"  # always hybrid ensemble
+    sigma_weight: float = 0.6
+    forest_weight: float = 0.4
+    anomaly_threshold_forest: float = -0.1  # IsolationForest decision_function threshold
+
     # ── Swarm Configuration ──────────────────────────────────────────────
     swarm_min_agents: int = 1
     swarm_max_agents: int = 5

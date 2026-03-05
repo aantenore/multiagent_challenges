@@ -10,6 +10,43 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+# ── Detection Metadata (Layer 0 → Layer 1 explainability) ──────────────
+
+class DetectionMetadata(BaseModel):
+    """Structured explanation from the L0 Hybrid Anomaly Router.
+
+    Passed to L1 agents so they know WHY L0 escalated this entity,
+    letting them focus on the flagged signals instead of re-analysing noise.
+    """
+
+    is_anomalous: bool = Field(
+        default=False, description="Whether the entity was flagged as anomalous"
+    )
+    confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Overall anomaly confidence"
+    )
+    zscore_flagged: bool = Field(
+        default=False, description="Z-Score univariate analysis flagged anomaly"
+    )
+    forest_flagged: bool = Field(
+        default=False, description="IsolationForest multivariate analysis flagged anomaly"
+    )
+    detection_type: str = Field(
+        default="none",
+        description="'statistical', 'behavioural', 'both', or 'none'"
+    )
+    deviating_features: dict[str, float] = Field(
+        default_factory=dict,
+        description="Map of feature_name → z-score for features that exceeded threshold"
+    )
+    forest_score: float = Field(
+        default=0.0, description="IsolationForest anomaly decision score"
+    )
+    report: str = Field(
+        default="", description="Human-readable report for L1 agents"
+    )
+
+
 # ── Manifest Schema ─────────────────────────────────────────────────────
 
 class ManifestEntry(BaseModel):
