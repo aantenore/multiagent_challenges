@@ -69,6 +69,7 @@ def write_audit_log(
             
         audit_data.append({
             "entity_id": r.entity_id,
+            "session_id": r.session_id,
             "final_prediction": r.final_prediction,
             "layer_decided": r.layer_decided,
             "verdicts": verdicts_data

@@ -73,17 +73,22 @@ If the series is too short or irregular to find an ACF peak, it seamlessly falls
                     └──────────────────┘
 ```
 
+
+---
+
 ### Layer 0 — IsolationForest One-Class Engine
 
-- **Fit phase:** Trained on all available training data (which inherently represents the class-0 standard monitoring baseline).
-- **Predict phase:**
+- **Fit phase (Single-Pass):** The Isolation Forest is instantiated and trained exactly ONCE per level, exclusively on that level's Training Set (which acts as the Class 0 mathematical baseline).
+- **RAG Warm-up Phase:** After fitting, L0 predicts on its own training set. Thanks to the `contamination="auto"` parameter, it identifies edge cases. These outliers are evaluated by the L1/L2 LLM chain, and their final resolutions are saved into **ChromaDB**. This transforms ambiguous training records into a "Long-Term Memory" (few-shot examples) for the agents.
+- **Evaluation phase:** The locked L0 model evaluates new incoming data.
   - **Inlier** (inside boundary) → emit `pred=0` at zero LLM cost.
-  - **Outlier** (outside boundary) → escalate to L1 with `DetectionMetadata` (deviating features, IF score).
+  - **Outlier** (outside boundary) → escalate to L1 with `DetectionMetadata` (deviating features). The LLMs will now query the warmed-up RAG to cross-reference similar historical cases.
 
 ### Layer 1 — Anti-False-Positive Filter (LLM Agents)
 
 L1 agents do NOT discover anomalies in numbers (L0 does that). They act as **contextual false-positive filters**:
 - Read the persona, profile, and lifestyle context.
+- **RAG-Assisted**: Query the memory bank for similar cases handled during the warm-up phase.
 - If the mathematical deviation is **justified** by life context → output `0`.
 - If NOT justified → confirm `1` (preventive support).
 
@@ -103,9 +108,9 @@ Agents within a swarm use **staggered temperatures** for opinion diversity. Vote
 
 Both **role coordinators** and **agents within each role** execute in parallel using `ThreadPoolExecutor`.
 
-### Per-Level Training
+### Per-Level Training & Sanity Cycle
 
-Each stage `i` trains on **its own data only** (not cumulative). RAG is reset between levels. Each level is fully self-contained and independent.
+Each stage `i` undergoes the full Single-Pass logic. After the Fit, the pipeline runs a **Sanity Predict Cycle** on the training set to verify baseline stability (expected anomaly rate $\approx$ 0%).
 
 ---
 
@@ -235,7 +240,7 @@ python main.py -m manifest.json --log-level DEBUG
 
 **What happens per stage:**
 1. **Reset:** RAG cleared for level isolation
-2. **Train:** This level's training data → build dossiers → engineer features → fit IsolationForest
+2. **Train:** This level's training data → build dossiers → engineer features → fit IsolationForest (Single-Pass)
 3. **Evaluate:** Level `i` eval data → predict (L0 → L1 anti-FP → L2) → write `predictions_{stage}.txt`
 
 ### 5. Build submission archive

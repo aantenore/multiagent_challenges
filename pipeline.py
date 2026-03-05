@@ -112,113 +112,124 @@ class AdaptivePipeline:
         stage: Stage,
         results_dir: Path | None = None,
     ) -> list[PipelineResult]:
-        """Process one stage: train on THIS level's data only, then evaluate."""
-        # ── 0. Reset RAG for this level (each level is self-contained) ──
+        """Process one stage: train on THIS level's data only, then evaluate.
+        
+        LA REGOLA D'ORO PER IL LAYER 0:
+        Per ogni stage, l'Isolation Forest deve essere istanziato a nuovo e il suo 
+        metodo .fit() deve essere chiamato ESATTAMENTE UNA VOLTA sul Training Set.
+        """
+        # ── 1. Reset & Setup ────────────────────────────────────────────────
         if self._rag.is_enabled:
             self._rag.reset()
             logger.info("  RAG reset for stage '%s'", stage.name)
 
-        # ── 1. Per-level training ──────────────────────────────────
+        self._router = OneClassRouter()
+        logger.info("  Layer 0 instance reset for stage '%s'", stage.name)
+
+        # ── 2. Training Phase (LA FASE DI FIT - Single-Pass) ────────────────
         train_sources = stage.training_sources
+        coordinators = []
+        
         if train_sources:
-            console.print(
-                f"  Training: [bold]{len(train_sources)}[/] sources "
-                f"(level: {stage.name})"
-            )
+            console.print(f"  Training stage: [bold]{len(train_sources)}[/] sources")
             train_builder = DossierBuilder.from_entries(train_sources, manager.base_dir)
             train_dossiers = train_builder.build_all()
 
-            # Engineer features
             for dossier in train_dossiers.values():
                 dossier.features = self._extractor.extract(dossier)
 
-            # Build L0 baselines (training = well-being baseline)
+            # >>> MOMENTO CRITICO: Esegui L0.build_baselines (FIT) <<<
+            # The Isolation Forest is instantiated and trained exactly ONCE per level.
+            console.print("  [blue]ℹ Layer 0: Building Baselines (Single-Pass)...[/]")
             self._router.build_baselines(train_dossiers)
-            console.print(f"  [green]✓ L0 baselines built on {len(train_dossiers)} entities[/]")
 
-            # Store training entities in RAG (as wellness baseline)
-            if self._rag.is_enabled:
+            # ── RAG Warm-up Phase ───────────────────────────────────────────
+            # L0 predicts on its own training set to identify edge cases for RAG.
+            all_entries = train_sources + (stage.evaluation_sources or [])
+            coordinators = SwarmFactory.create_coordinators(
+                roles={e.role for e in all_entries},
+                manifest_entries=all_entries,
+            )
+
+            train_session_id = generate_session_id()
+            set_current_session_id(train_session_id)
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                warmup_task = progress.add_task(
+                    f"  {stage.name}: RAG Warm-up Phase…", total=len(train_dossiers)
+                )
+
                 for eid, dossier in train_dossiers.items():
-                    summary = self._rag.summarise_dossier(dossier)
-                    # Use the actual dossier label if it exists in features/metadata, 
-                    # otherwise default to 0 (Wellness)
-                    label = getattr(dossier, "label", 0) 
-                    self._rag.add_case(eid, summary, label=label)
+                    # L0 identifies outliers in its own training set
+                    l0_v, _, _ = self._router.to_verdict(eid, dossier)
+                    
+                    if l0_v is None: # L0 escalated (edge case)
+                        logger.info("  [Warm-up] Inspecting RAG Edge Case: %s", eid)
+                        # Force escalation to L1/L2 to populate RAG
+                        result = self._process_entity(dossier, coordinators, force_escalation=True, session_id=train_session_id)
+                        
+                        if self._rag.is_enabled:
+                            summary = self._rag.summarise_dossier(dossier)
+                            reasoning = result.verdicts[-1].reasoning if result.verdicts else "No reasoning."
+                            rag_content = f"[TRAINING_MEMO][Decision={result.final_prediction}] {summary}\nReasoning: {reasoning}"
+                            self._rag.add_case(eid, rag_content, label=result.final_prediction)
+                    
+                    progress.advance(warmup_task)
 
-        # ── 2. Evaluation Prep ──────────────────────────────────────
+            # SANITY CHECK: Predict on Train Set
+            train_results: list[PipelineResult] = []
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                sanity_task = progress.add_task(
+                    f"  {stage.name}: Sanity Predict (Train Set)…", total=len(train_dossiers)
+                )
+                for dossier in train_dossiers.values():
+                    result = self._process_entity(dossier, coordinators, session_id=train_session_id)
+                    train_results.append(result)
+                    progress.advance(sanity_task)
+
+            train_out_file = f"train_predictions_{stage.name}.txt"
+            train_out_path = results_dir / train_out_file if results_dir else Path(train_out_file)
+            write_predictions(train_results, train_out_path)
+            
+            audit_out_file = f"train_audit_log_{stage.name}.json"
+            audit_out_path = results_dir / audit_out_file if results_dir else Path(audit_out_file)
+            write_audit_log(train_results, audit_out_path)
+            
+            console.print(f"  [blue]ℹ Train stage complete. RAG warmed up and L0 model established.[/]")
+
+        # ── 3. Evaluation Phase (ASSOLUTAMENTE NO FIT) ──────────────────────
         eval_sources = stage.evaluation_sources
         if not eval_sources:
             console.print("  [yellow]⚠ No evaluation sources — skipping[/]")
             return []
 
-        console.print(
-            f"  Evaluation prep: [bold]{len(eval_sources)}[/] sources"
-        )
+        console.print(f"  Evaluation phase: [bold]{len(eval_sources)}[/] sources")
+        logger.info("INFO: Layer 0 PREDICTING on Evaluation Set (Model Locked)")
+        
         eval_builder = DossierBuilder.from_entries(eval_sources, manager.base_dir)
         eval_dossiers = eval_builder.build_all()
 
         for dossier in eval_dossiers.values():
             dossier.features = self._extractor.extract(dossier)
 
-        all_entries = train_sources + eval_sources if train_sources else eval_sources
-        coordinators = SwarmFactory.create_coordinators(
-            roles={e.role for e in all_entries},
-            manifest_entries=all_entries,
-        )
+        if not coordinators:
+            all_entries = eval_sources
+            coordinators = SwarmFactory.create_coordinators(
+                roles={e.role for e in all_entries},
+                manifest_entries=all_entries,
+            )
 
-        # ── 3. Predict training set (diagnostic) ────────────────────
-        train_results: list[PipelineResult] = []
-        if train_dossiers:
-            # Rotate session for training phase
-            train_session_id = generate_session_id()
-            set_current_session_id(train_session_id)
-            if results_dir:
-                session_file = results_dir / f"langfuse_session_{stage.name}_train.json"
-                with open(session_file, "w", encoding="utf-8") as f:
-                    json.dump({"stage": stage.name, "phase": "train", "session_id": train_session_id}, f, indent=2)
-
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-            ) as progress:
-                train_task = progress.add_task(
-                    f"  {stage.name}: self-diagnostic (autoclassifying training set)…", total=len(train_dossiers)
-                )
-                for dossier in train_dossiers.values():
-                    logger.info("  [Self-Diagnostic] System classifying %s to reinforce RAG", dossier.entity_id)
-                    result = self._process_entity(dossier, coordinators)
-                    train_results.append(result)
-                    
-                    # Error reinforcement: if we predicted 1 but it was 0 (training ground truth)
-                    # we reinforce the RAG to mark this as a tricky wellbeing case
-                    ground_truth = 0 # In this specific challenge context
-                    if result.final_prediction != ground_truth and self._rag.is_enabled:
-                        summary = self._rag.summarise_dossier(dossier)
-                        reinforced_summary = f"[TRICKY_CASE_MISCLASSIFIED_AS_{result.final_prediction}] {summary}"
-                        self._rag.add_case(dossier.entity_id, reinforced_summary, label=ground_truth)
-                        
-                    progress.advance(train_task)
-            
-            train_out_file = f"train_predictions_{stage.name}.txt"
-            train_out_path = results_dir / train_out_file if results_dir else Path(train_out_file)
-            write_predictions(train_results, train_out_path)
-            
-            # Write diagnostic audit log
-            audit_out_file = f"train_audit_log_{stage.name}.json"
-            audit_out_path = results_dir / audit_out_file if results_dir else Path(audit_out_file)
-            write_audit_log(train_results, audit_out_path)
-            
-            console.print(f"  [blue]ℹ Training predictions written to {train_out_file} (RAG reinforced on errors)[/]")
-
-        # ── 4. Predict evaluation set ──────────────────────────────
         eval_session_id = generate_session_id()
         set_current_session_id(eval_session_id)
-        if results_dir:
-            session_file = results_dir / f"langfuse_session_{stage.name}_eval.json"
-            with open(session_file, "w", encoding="utf-8") as f:
-                json.dump({"stage": stage.name, "phase": "eval", "session_id": eval_session_id}, f, indent=2)
-
+        
         eval_results: list[PipelineResult] = []
         with Progress(
             SpinnerColumn(),
@@ -226,14 +237,14 @@ class AdaptivePipeline:
             console=console,
         ) as progress:
             eval_task = progress.add_task(
-                f"  {stage.name}: predicting eval set…", total=len(eval_dossiers)
+                f"  {stage.name}: Predicting Evaluation Set…", total=len(eval_dossiers)
             )
             for dossier in eval_dossiers.values():
-                result = self._process_entity(dossier, coordinators)
+                result = self._process_entity(dossier, coordinators, session_id=eval_session_id)
                 eval_results.append(result)
                 progress.advance(eval_task)
 
-        # ── 5. Write eval output & audit ───────────────────────────────────
+        # ── 4. Write eval output & audit ───────────────────────────────────
         out_file = stage.output_file or f"predictions_{stage.name}.txt"
         out_path = results_dir / out_file if results_dir else Path(out_file)
         write_predictions(eval_results, out_path)
@@ -250,6 +261,8 @@ class AdaptivePipeline:
         self,
         dossier: EntityDossier,
         coordinators: list[RoleCoordinator],
+        force_escalation: bool = False,
+        session_id: str | None = None,
     ) -> PipelineResult:
         """Process a single entity through L0 → L1 coordinators → L2."""
         eid = dossier.entity_id
@@ -257,14 +270,19 @@ class AdaptivePipeline:
 
         # Layer 0 — One-Class Anomaly Engine (SVM + IsolationForest)
         l0_verdict, complexity, detection_meta = self._router.to_verdict(eid, dossier)
-        if l0_verdict is not None:
+        if l0_verdict is not None and not force_escalation:
             verdicts.append(l0_verdict)
             return PipelineResult(
                 entity_id=eid,
+                session_id=session_id,
                 final_prediction=l0_verdict.prediction,
                 layer_decided="L0_OneClassRouter",
                 verdicts=verdicts,
             )
+        
+        # In case of force_escalation, we might still want to record L0's opinion but proceed
+        if l0_verdict and force_escalation:
+            verdicts.append(l0_verdict)
 
         # Layer 1 — Dynamic Swarm via Coordinators
         rag_examples = []
@@ -279,8 +297,6 @@ class AdaptivePipeline:
         )
         verdicts.extend(swarm_consensus_list)
 
-
-
         # Layer 2 — Global Orchestrator
         final_verdict = self._orchestrator.decide(
             dossier, swarm_consensus_list, rag_examples,
@@ -289,6 +305,7 @@ class AdaptivePipeline:
 
         return PipelineResult(
             entity_id=eid,
+            session_id=session_id,
             final_prediction=final_verdict.prediction,
             layer_decided="L2_GlobalOrchestrator",
             verdicts=verdicts,

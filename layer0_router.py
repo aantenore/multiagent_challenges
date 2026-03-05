@@ -45,13 +45,18 @@ class OneClassRouter:
         self._scaler: StandardScaler | None = None
         self._iso: IsolationForest | None = None
         self._feature_names: list[str] = []
-        self._is_fitted = False
+        self._fitted = False
 
         # Population stats for explainability
         self._population_means: dict[str, float] = {}
         self._population_stds: dict[str, float] = {}
 
         logger.info("OneClassRouter initialised (IsolationForest engine)")
+
+    @property
+    def is_fitted(self) -> bool:
+        """Returns True if the model has been fitted."""
+        return self._fitted
 
     # ── Feature Extraction ──────────────────────────────────────────────
 
@@ -62,8 +67,34 @@ class OneClassRouter:
 
     # ── Fit (Training = Class 0 only) ───────────────────────────────────
 
+    def reset(self) -> None:
+        """Resets the internal state of the router.
+        
+        Clears the fitted IsolationForest model, the StandardScaler, and 
+        all population statistics. This is used during multi-pass 
+        distillation to ensure the second pass starts from a clean state.
+        """
+        self._scaler = None
+        self._iso = None
+        self._feature_names = []
+        self._fitted = False
+        self._population_means = {}
+        self._population_stds = {}
+        logger.info("OneClassRouter internal state reset.")
+
     def build_baselines(self, train_dossiers: dict[str, EntityDossier]) -> None:
-        """Fit IsolationForest on class-0 training data."""
+        """Fits the IsolationForest engine on normal well-being clusters.
+
+        This method extracts feature vectors from the provided dossiers, 
+        calculates population statistics for interpretability, and fits 
+        an IsolationForest to learn the boundary of 'normal' behaviour.
+
+        Args:
+            train_dossiers (dict[str, EntityDossier]): The training set of 
+                dossiers assumed to represent normal Class 0 behavior.
+        """
+        assert not self._fitted, "Layer 0 already fitted for this stage! Reset or re-instantiate requested."
+        
         feature_dicts: list[dict[str, float]] = []
         for dossier in train_dossiers.values():
             fv = self._dossier_to_feature_vector(dossier)
@@ -100,14 +131,14 @@ class OneClassRouter:
         # Fit IsolationForest
         self._iso = IsolationForest(
             n_estimators=100,
-            contamination=get_settings().l0_contamination,
+            contamination="auto",
             random_state=42,
         )
         self._iso.fit(X_scaled)
 
-        self._is_fitted = True
+        self._fitted = True
         logger.info(
-            "L0 IsolationForest fitted on %d class-0 samples (%d features)",
+            "INFO: Layer 0 successfully FITTED on Training Set (%d samples, %d features)",
             len(X), len(all_keys),
         )
 
@@ -183,8 +214,7 @@ class OneClassRouter:
         - Inlier  → verdict=0 at zero LLM cost.
         - Outlier → None (escalate to L1) with math details.
         """
-        if not self._is_fitted:
-            return None, 1.0, DetectionMetadata()
+        assert self._fitted, "Layer 0 MUST be fitted before prediction!"
 
         meta = self._build_metadata(entity_id, dossier)
 
@@ -205,7 +235,6 @@ class OneClassRouter:
 
     def get_complexity(self, entity_id: str, dossier: EntityDossier) -> float:
         """Return a complexity score in [0.0, 1.0]."""
-        if not self._is_fitted:
-            return 1.0
+        assert self._fitted, "Layer 0 MUST be fitted before complexity assessment!"
         _, complexity, _ = self.to_verdict(entity_id, dossier)
         return complexity

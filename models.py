@@ -193,6 +193,9 @@ class PipelineResult(BaseModel):
     """Final output record for one entity after the full pipeline."""
 
     entity_id: str
+    session_id: str | None = Field(
+        default=None, description="Langfuse session ID for this result"
+    )
     final_prediction: int = Field(
         ..., ge=0, le=1, description="Final binary label"
     )
