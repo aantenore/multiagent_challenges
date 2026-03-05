@@ -133,12 +133,27 @@ class SlidingWindowExtractor:
                 feats[f"{col}_ma7"] = ma7
                 feats[f"{col}_ma7_deviation"] = float(series.iloc[-1] - ma7)
 
-            # ── Linear Slope / Trend ──
-            if len(series) >= 3:
-                # Use days since first event as X axis for proper slope
+                # ── Linear Slope / Trend (1st Derivative) ──
                 x = (series.index - series.index[0]).total_seconds() / 86400.0
                 slope = float(np.polyfit(x, series.values, 1)[0])
                 feats[f"{col}_slope"] = slope
+
+                # ── Acceleration (2nd Derivative) ──
+                # Compare slope of first half vs second half
+                if len(series) >= 6:
+                    mid = len(series) // 2
+                    s1 = series.iloc[:mid]
+                    s2 = series.iloc[mid:]
+                    x1 = (s1.index - s1.index[0]).total_seconds() / 86400.0
+                    x2 = (s2.index - s2.index[0]).total_seconds() / 86400.0
+                    slope1 = float(np.polyfit(x1, s1.values, 1)[0])
+                    slope2 = float(np.polyfit(x2, s2.values, 1)[0])
+                    feats[f"{col}_acceleration"] = slope2 - slope1
+
+            # ── Temporal Patterns (Hour/Day) ──
+            hours = series.index.hour
+            feats[f"{col}_hour_mean"] = float(hours.mean())
+            feats[f"{col}_weekend_ratio"] = float(sum(1 for d in series.index.dayofweek if d >= 5) / len(series))
 
             # ── Dynamic Sizing via ACF (Autocorrelation) ──
             # Re-sample smoothly to daily frequency to calculate ACF reliably if we have enough span
@@ -193,6 +208,16 @@ class SlidingWindowExtractor:
             feats["has_specialist"] = 0.0
             feats["n_preventive_screenings"] = 0.0
 
+        # ── Cross-Feature Interactions ──
+        if "PhysicalActivityIndex_mean" in feats and "EnvironmentalExposureLevel_mean" in feats:
+            act = feats["PhysicalActivityIndex_mean"]
+            exp = feats["EnvironmentalExposureLevel_mean"]
+            # High exposure + low activity = potentially higher risk
+            feats["activity_exposure_imbalance"] = exp / (act + 1.0)
+            
+        if "SleepQualityIndex_mean" in feats and "PhysicalActivityIndex_mean" in feats:
+            feats["sleep_activity_ratio"] = feats["SleepQualityIndex_mean"] / (feats["PhysicalActivityIndex_mean"] + 1.0)
+
         return feats
 
     # ── Spatial ─────────────────────────────────────────────────────────
@@ -219,9 +244,30 @@ class SlidingWindowExtractor:
         feats["mobility_radius_km"] = float(np.std(dists))
         feats["max_dist_from_home_km"] = float(max(dists)) if dists else 0.0
 
-        # Distinct cities
-        cities = {r.get("city", "") for r in rows if r.get("city")}
-        feats["n_distinct_cities"] = float(len(cities))
+        # Distinct cities and Shannon Entropy
+        cities = [r.get("city", "") for r in rows if r.get("city")]
+        feats["n_distinct_cities"] = float(len(set(cities)))
+        
+        if cities:
+            counts = pd.Series(cities).value_counts()
+            probs = counts / len(cities)
+            entropy = -float((probs * np.log2(probs)).sum())
+            feats["location_entropy"] = entropy
+        else:
+            feats["location_entropy"] = 0.0
+
+        # Distance from Residence
+        # We try to find residence from profile info passed in extract
+        res_lat = feats.get("residence_lat")
+        res_lng = feats.get("residence_lng")
+        if res_lat is not None and res_lng is not None:
+            home_dists = [
+                self._haversine(res_lat, res_lng, la, lo)
+                for la, lo in zip(lats, lngs)
+            ]
+            feats["mean_dist_from_residence"] = float(np.mean(home_dists))
+            feats["max_dist_from_residence"] = float(max(home_dists))
+            feats["residence_displacement_std"] = float(np.std(home_dists))
 
         return feats
 

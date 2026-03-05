@@ -20,7 +20,10 @@ Analyse the following **{role}** data for entity '{entity_id}' and decide whethe
 
 ### Instructions
 - Look for deteriorating trends, anomalies, or warning signals.
-- Consider: declining physical activity, worsening sleep, increasing environmental exposure, emergency visits, specialist consultations.
+- **Reference Thresholds**:
+    - PhysicalActivityIndex: < 0.3 (Sedentary/Atrophy Risk), 0.3-0.7 (Standard), > 0.7 (Active).
+    - SleepQualityIndex: < 0.4 (Chronic Fatigue/Disorder), > 0.8 (Optimal).
+    - EnvironmentalExposureLevel: > 0.7 (Toxic/Hazardous Exposure).
 - A sharp DROP in PhysicalActivityIndex or SleepQualityIndex across events is a red flag.
 - EventTypes like 'emergency visit', 'specialist consultation', 'follow-up assessment' signal escalation.
 - Reduced mobility radius or sudden isolation patterns indicate withdrawal.

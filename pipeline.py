@@ -337,6 +337,26 @@ class AdaptivePipeline:
         )
         verdicts.extend(swarm_consensus_list)
 
+        # ── Optimization: Skip L2 if L1 is unanimous ──
+        cfg = get_settings()
+        if cfg.unanimous_skip_l2 and len(swarm_consensus_list) > 0:
+            all_agreed = all(v.agreement_ratio >= 0.99 for v in swarm_consensus_list)
+            first_pred = swarm_consensus_list[0].prediction
+            all_same_pred = all(v.prediction == first_pred for v in swarm_consensus_list)
+            
+            if all_agreed and all_same_pred:
+                logger.info(
+                    "L1 Unanimous Consensus (pred=%d) reached for %s. Skipping L2 Orchestrator.",
+                    first_pred, eid
+                )
+                return PipelineResult(
+                    entity_id=eid,
+                    session_id=session_id,
+                    final_prediction=first_pred,
+                    layer_decided="L1_UnanimousConsensus",
+                    verdicts=verdicts,
+                )
+
         # Layer 2 — Global Orchestrator
         final_verdict = self._orchestrator.decide(
             dossier, swarm_consensus_list, rag_examples,

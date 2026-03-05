@@ -38,8 +38,20 @@ class GlobalOrchestrator(BaseAgent):
         swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict],
         rag_examples: list[dict] | None = None,
     ) -> AgentVerdict:
-        """Synthesise swarm consensus into a final verdict."""
-        return self.analyze(dossier, rag_examples, _swarm_verdicts=swarm_verdicts)
+        """Synthesise swarm consensus into a final verdict with conservative fallback."""
+        verdict = self.analyze(dossier, rag_examples, _swarm_verdicts=swarm_verdicts)
+        
+        # Optimization: Consistent with "FN >> FP", if confidence is low, we assume risk (1)
+        cfg = get_settings()
+        if verdict.confidence < cfg.l2_confidence_threshold and verdict.prediction == 0:
+            logger.warning(
+                "L2 confidence (%.2f) below threshold (%.2f). Overriding pred=0 to pred=1 (Conservative Fallback)",
+                verdict.confidence, cfg.l2_confidence_threshold
+            )
+            verdict.prediction = 1
+            verdict.reasoning = f"[LOW_CONFIDENCE_OVERRIDE] {verdict.reasoning}"
+            
+        return verdict
 
     def analyze(  # type: ignore[override]
         self,

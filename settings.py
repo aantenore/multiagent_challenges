@@ -44,10 +44,11 @@ class Settings(BaseSettings):
     team_name: str = "mirror"
 
     # ── Pipeline Hyperparameters ────────────────────────────────────────
+    # Costs for economic decisions (L2 Orchestrator)
     l0_lower_threshold: float = 0.15
     l0_upper_threshold: float = 0.85
     fp_cost: float = 3.0
-    fn_cost: float = 5.0
+    fn_cost: float = 15.0  # Conservative: FN is much more expensive than FP
 
     # ── Layer 0 One-Class Engine ────────────────────────────────────────
     # IsolationForest only — no user-tunable weights needed
@@ -62,6 +63,10 @@ class Settings(BaseSettings):
     rag_collection_name: str = "case_memory"
     top_k_rag: int = 5
     rag_db_path: str = "./chroma_db"
+
+    # ── Optimization ────────────────────────────────────────────────────
+    l2_confidence_threshold: float = 0.7
+    unanimous_skip_l2: bool = True
 
     # ── Validators ──────────────────────────────────────────────────────
     @field_validator("l0_upper_threshold")
