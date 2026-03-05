@@ -74,6 +74,7 @@ class DomainAgent(BaseAgent):
                 role_title=self.role.title(),
                 data_slice=data_slice,
                 profile_json=json.dumps(dossier.profile_data, default=str, indent=2),
+                features_json=json.dumps(dossier.features, default=str, indent=2),
                 context=dossier.context_data[:2000] if dossier.context_data else "N/A",
                 rag_section=rag_section,
                 l0_section=l0_section,
