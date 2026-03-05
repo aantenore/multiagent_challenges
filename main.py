@@ -36,6 +36,12 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging verbosity",
     )
+    parser.add_argument(
+        "--level",
+        type=str,
+        default=None,
+        help="Specify a single stage/level to run (e.g., 'level_1')",
+    )
 
     args = parser.parse_args()
 
@@ -86,7 +92,11 @@ def main() -> None:
 
     pipeline = AdaptivePipeline()
     try:
-        stage_results = pipeline.run(manifest_path=args.manifest, results_dir=results_dir)
+        stage_results = pipeline.run(
+            manifest_path=args.manifest, 
+            results_dir=results_dir,
+            target_level=args.level
+        )
 
         c = Console()
         for stage_name, results in stage_results.items():

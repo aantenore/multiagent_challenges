@@ -111,13 +111,16 @@ class DomainAgent(BaseAgent):
         """Return the JSON-serialised data slice for this role."""
         match self.role:
             case "temporal":
-                data = dossier.temporal_data[-20:]  # last 20 events
+                # Reduced from 20 to 10 events for token efficiency
+                data = dossier.temporal_data[-10:]  
             case "spatial":
-                data = dossier.spatial_data[-30:]  # last 30 pings
+                # Reduced from 30 to 15 locations for token efficiency
+                data = dossier.spatial_data[-15:]  
             case "profile":
                 data = dossier.profile_data
             case "context":
-                return dossier.context_data[:3000]
+                # Reduced from 3000 to 1500 chars for token efficiency
+                return dossier.context_data[:1500]
             case _:
                 data = {}
         return json.dumps(data, default=str, indent=1)
@@ -178,7 +181,9 @@ class RoleCoordinator:
                 for row in data[-10:]:
                     for v in row.values():
                         try:
-                            numeric_vals.append(float(v))
+                            f_val = float(v)
+                            if not math.isnan(f_val):
+                                numeric_vals.append(f_val)
                         except (ValueError, TypeError):
                             pass
                 if numeric_vals:

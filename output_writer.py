@@ -46,3 +46,39 @@ def write_predictions(
         len(flagged), out, len(results),
     )
     return out
+
+
+def write_audit_log(
+    results: list[PipelineResult],
+    output_path: str | Path,
+) -> Path:
+    """Write detailed audit log of the pipeline execution to JSON."""
+    out = Path(output_path)
+    
+    audit_data = []
+    for r in results:
+        # Serialize verdicts into basic dicts without complex object types
+        verdicts_data = []
+        for v in r.verdicts:
+            verdicts_data.append({
+                "agent_name": getattr(v, "agent_name", "Unknown"),
+                "prediction": v.prediction,
+                "confidence": v.confidence,
+                "reasoning": v.reasoning,
+            })
+            
+        audit_data.append({
+            "entity_id": r.entity_id,
+            "final_prediction": r.final_prediction,
+            "layer_decided": r.layer_decided,
+            "verdicts": verdicts_data
+        })
+        
+    import json
+    out.write_text(
+        json.dumps(audit_data, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+    
+    logger.info("Wrote audit log for %d entities to %s", len(results), out)
+    return out

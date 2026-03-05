@@ -39,7 +39,7 @@ from layer0_router import OneClassRouter
 from manifest_manager import ManifestManager
 from models import EntityDossier, ManifestEntry, PipelineResult, Stage, SwarmConsensus
 from orchestrator import GlobalOrchestrator
-from output_writer import write_predictions
+from output_writer import write_predictions, write_audit_log
 from rag_store import RAGStore
 from settings import get_settings
 
@@ -64,8 +64,9 @@ class AdaptivePipeline:
         self,
         manifest_path: str | Path,
         results_dir: Path | None = None,
+        target_level: str | None = None,
     ) -> dict[str, list[PipelineResult]]:
-        """Execute the full N-stage pipeline.
+        """Execute the full N-stage pipeline or a specific stage.
 
         Returns a dict mapping stage_name → list[PipelineResult].
         """
@@ -82,6 +83,12 @@ class AdaptivePipeline:
         manager = ManifestManager(manifest_path)
         manager.load()
         stages = manager.stages
+
+        if target_level:
+            stages = [s for s in stages if s.name == target_level]
+            if not stages:
+                console.print(f"[bold red]Target level '{target_level}' not found in manifest.[/]")
+                return {}
 
         console.print(f"Stages: [bold]{len(stages)}[/] — {[s.name for s in stages]}")
 
@@ -195,6 +202,12 @@ class AdaptivePipeline:
             train_out_file = f"train_predictions_{stage.name}.txt"
             train_out_path = results_dir / train_out_file if results_dir else Path(train_out_file)
             write_predictions(train_results, train_out_path)
+            
+            # Write diagnostic audit log
+            audit_out_file = f"train_audit_log_{stage.name}.json"
+            audit_out_path = results_dir / audit_out_file if results_dir else Path(audit_out_file)
+            write_audit_log(train_results, audit_out_path)
+            
             console.print(f"  [blue]ℹ Training predictions written to {train_out_file} (RAG reinforced on errors)[/]")
 
         # ── 4. Predict evaluation set ──────────────────────────────
@@ -219,10 +232,14 @@ class AdaptivePipeline:
                 eval_results.append(result)
                 progress.advance(eval_task)
 
-        # ── 5. Write eval output ───────────────────────────────────
+        # ── 5. Write eval output & audit ───────────────────────────────────
         out_file = stage.output_file or f"predictions_{stage.name}.txt"
         out_path = results_dir / out_file if results_dir else Path(out_file)
         write_predictions(eval_results, out_path)
+        
+        audit_file = f"audit_log_{stage.name}.json"
+        audit_path = results_dir / audit_file if results_dir else Path(audit_file)
+        write_audit_log(eval_results, audit_path)
 
         return eval_results
 

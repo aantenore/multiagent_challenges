@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     smart_model_name: str = "gpt-4o"
     gemini_cheap_model_name: str = "gemini-2.0-flash"
     gemini_smart_model_name: str = "gemini-2.5-pro-exp-03-25"
-    model_temperature: float = 0.2
+    model_temperature: float = 0.1
     max_agent_retries: int = 3
 
     # ── Langfuse Observability ──────────────────────────────────────────
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # ── Pipeline Hyperparameters ────────────────────────────────────────
     l0_lower_threshold: float = 0.15
     l0_upper_threshold: float = 0.85
-    l0_contamination: float = 0.05 # 5% baseline anomaly rate
+    l0_contamination: float = 0.15 # 15% baseline anomaly rate to catch more FNs
     fp_cost: float = 1.0
     fn_cost: float = 5.0
 
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     swarm_min_agents: int = 1
     swarm_max_agents: int = 5
     swarm_complexity_threshold: float = 0.3
-    swarm_temp_spread: float = 0.15
+    swarm_temp_spread: float = 0.05
 
     # ── RAG Configuration ───────────────────────────────────────────────
     rag_collection_name: str = "case_memory"

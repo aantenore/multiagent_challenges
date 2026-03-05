@@ -31,6 +31,7 @@
 3. Look for cross-role consensus — if multiple roles flag concerns, the evidence is very strong.
 4. Even ONE strong signal (e.g., emergency visit, specialist consultation, sharp metric decline) should bias toward prediction=1.
 5. A role with low agreement but high complexity suggests genuine ambiguity — apply extra caution.
-6. Provide your final prediction.
+6. **RAG Authority**: Historical cases with `label=0` are confirmed safe/healthy baselines. `label=1` or `[TRICKY_CASE_MISCLASSIFIED_AS_1]` means the entity requires preventive support despite possibly looking safe.
+7. Provide your final prediction.
 
 Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}
