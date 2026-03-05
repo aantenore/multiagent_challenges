@@ -5,7 +5,7 @@ For each stage i (0..N-1):
   1. Build dossiers from CUMULATIVE training data (stages 0..i)
   2. Engineer features and train L0 (if ground truth available)
   3. Build dossiers from evaluation data (stage i only)
-  4. Predict: L0 → L1 swarm → L2 orchestrator
+  4. Predict: L0 → L1 coordinators (dynamic swarm) → L2 orchestrator
   5. Write predictions to stage-specific output file
   6. Store errors in RAG for next stage
 """
@@ -17,17 +17,33 @@ import logging
 import uuid
 from pathlib import Path
 
-from langfuse.decorators import langfuse_context, observe
+try:
+    from langfuse.decorators import langfuse_context, observe
+except ImportError:
+    # Fallback if langfuse is not installed
+    class DummyLangfuseContext:
+        def update_current_trace(self, *args, **kwargs):
+            pass
+        def __getattr__(self, name):
+            # Allow accessing any attribute without error
+            return lambda *args, **kwargs: None
+
+    langfuse_context = DummyLangfuseContext()
+
+    def observe(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from domain_swarm import SwarmFactory
+from domain_swarm import RoleCoordinator, SwarmFactory
 from dossier_builder import DossierBuilder
 from feature_engineer import SlidingWindowExtractor
 from layer0_router import DeterministicRouter
 from manifest_manager import ManifestManager
 from metrics import print_report
-from models import EntityDossier, ManifestEntry, PipelineResult, Stage
+from models import EntityDossier, ManifestEntry, PipelineResult, Stage, SwarmConsensus
 from orchestrator import GlobalOrchestrator
 from output_writer import write_predictions
 from rag_store import RAGStore
@@ -63,6 +79,12 @@ class AdaptivePipeline:
 
         console.rule("[bold cyan]Mirror Pipeline — Starting")
         console.print(f"Session ID: [bold green]{self._session_id}[/]")
+        console.print(f"LLM Provider: [bold]{self._cfg.llm_provider}[/]")
+        console.print(
+            f"Swarm Config: min={self._cfg.swarm_min_agents}, "
+            f"max={self._cfg.swarm_max_agents}, "
+            f"threshold={self._cfg.swarm_complexity_threshold}"
+        )
 
         manager = ManifestManager(manifest_path)
         manager.load()
@@ -127,9 +149,9 @@ class AdaptivePipeline:
         for dossier in eval_dossiers.values():
             dossier.features = self._extractor.extract(dossier)
 
-        # Create swarm with semantic metadata from all sources
+        # Create coordinators with semantic metadata from all sources
         all_entries = cum_train_sources + eval_sources if cum_train_sources else eval_sources
-        swarm_agents = SwarmFactory.create_swarm(
+        coordinators = SwarmFactory.create_coordinators(
             roles={e.role for e in all_entries},
             manifest_entries=all_entries,
         )
@@ -146,7 +168,7 @@ class AdaptivePipeline:
                 f"  {stage.name}: predicting…", total=len(eval_dossiers)
             )
             for dossier in eval_dossiers.values():
-                result = self._process_entity(dossier, swarm_agents)
+                result = self._process_entity(dossier, coordinators)
                 results.append(result)
                 progress.advance(task_id)
 
@@ -163,13 +185,13 @@ class AdaptivePipeline:
                 console.print(f"\n  [bold cyan]{stage.name} — Evaluation Report[/]")
                 print_report(y_true, y_pred)
 
-        # ── 6. Store errors in RAG ─────────────────────────────────
+        # ── 6. Store all cases in RAG (Balanced Learning) ──────────
         if labels and self._rag.is_enabled:
             for r in results:
                 true_label = labels.get(r.entity_id)
-                if true_label is not None and r.final_prediction != true_label:
+                if true_label is not None:
                     summary = self._rag.summarise_dossier(eval_dossiers[r.entity_id])
-                    self._rag.add_error_case(
+                    self._rag.add_case(
                         r.entity_id, summary, true_label, r.final_prediction,
                     )
 
@@ -180,14 +202,14 @@ class AdaptivePipeline:
     def _process_entity(
         self,
         dossier: EntityDossier,
-        swarm_agents,
+        coordinators: list[RoleCoordinator],
     ) -> PipelineResult:
-        """Process a single entity through L0 → L1 → L2."""
+        """Process a single entity through L0 → L1 coordinators → L2."""
         eid = dossier.entity_id
         verdicts = []
 
         # Layer 0
-        l0_verdict = self._router.to_verdict(eid, dossier.features)
+        l0_verdict, complexity = self._router.to_verdict(eid, dossier.features)
         if l0_verdict is not None:
             verdicts.append(l0_verdict)
             return PipelineResult(
@@ -197,20 +219,21 @@ class AdaptivePipeline:
                 verdicts=verdicts,
             )
 
-        # Layer 1 — Domain Swarm
+        # Layer 1 — Dynamic Swarm via Coordinators
         rag_examples = []
         if self._rag.is_enabled:
             summary = self._rag.summarise_dossier(dossier)
             rag_examples = self._rag.query_similar(summary)
 
-        swarm_verdicts = SwarmFactory.run_swarm(
-            swarm_agents, dossier, rag_examples,
+        swarm_consensus_list = SwarmFactory.run_coordinators(
+            coordinators, dossier, rag_examples,
+            l0_complexity=complexity,
         )
-        verdicts.extend(swarm_verdicts)
+        verdicts.extend(swarm_consensus_list)
 
         # Layer 2 — Global Orchestrator
         final_verdict = self._orchestrator.decide(
-            dossier, swarm_verdicts, rag_examples,
+            dossier, swarm_consensus_list, rag_examples,
         )
         verdicts.append(final_verdict)
 

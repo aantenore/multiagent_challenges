@@ -1,0 +1,27 @@
+## Role Coordinator Assessment — {role_title}
+
+You are the coordinator for the **{role}** data role, analysing entity '{entity_id}'.
+
+{semantic_section}
+### {role_title} Data
+```json
+{data_slice}
+```
+
+### Profile Summary
+```json
+{profile_json}
+```
+
+### Context
+{context}
+
+{rag_section}
+
+### Instructions
+- Focus exclusively on {role} signals: look for deteriorating trends, anomalies, or warning signs.
+- False Negatives are MUCH WORSE than False Positives — when in doubt, flag for review.
+- Be specific in your reasoning about what data patterns led to your decision.
+- Rate your confidence honestly: high confidence only when data clearly supports the prediction.
+
+Respond with JSON: {"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}

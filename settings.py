@@ -21,13 +21,19 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # ── LLM Provider ────────────────────────────────────────────────────
+    llm_provider: str = "openai"  # "openai" | "gemini"
+
     # ── LLM Provider Keys ───────────────────────────────────────────────
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    google_api_key: str = ""
 
     # ── Model Configuration ─────────────────────────────────────────────
     cheap_model_name: str = "gpt-4o-mini"
     smart_model_name: str = "gpt-4o"
+    gemini_cheap_model_name: str = "gemini-2.0-flash"
+    gemini_smart_model_name: str = "gemini-2.5-pro-exp-03-25"
     model_temperature: float = 0.2
     max_agent_retries: int = 3
 
@@ -42,6 +48,12 @@ class Settings(BaseSettings):
     window_size: int = 3
     fp_cost: float = 1.0
     fn_cost: float = 5.0
+
+    # ── Swarm Configuration ──────────────────────────────────────────────
+    swarm_min_agents: int = 1
+    swarm_max_agents: int = 5
+    swarm_complexity_threshold: float = 0.3
+    swarm_temp_spread: float = 0.15
 
     # ── RAG Configuration ───────────────────────────────────────────────
     rag_collection_name: str = "mirror_errors"

@@ -1,6 +1,6 @@
 """
 Layer 2 — Global Orchestrator (Economic Decider).
-Uses a smart model to synthesise swarm verdicts, RAG context,
+Uses a smart model to synthesise swarm consensus verdicts, RAG context,
 and economic trade-offs into a final classification.
 """
 
@@ -9,10 +9,18 @@ from __future__ import annotations
 import json
 import logging
 
-from langfuse.decorators import observe
+try:
+    from langfuse.decorators import observe
+except ImportError:
+    # Fallback if langfuse is not installed
+    def observe(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 from agent_base import BaseAgent
-from models import AgentVerdict, EntityDossier
+from llm_provider import get_provider
+from models import AgentVerdict, EntityDossier, SwarmConsensus
 from prompt_loader import load_prompt
 from settings import get_settings
 
@@ -20,13 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class GlobalOrchestrator(BaseAgent):
-    """Smart-model agent that weighs swarm verdicts economically."""
+    """Smart-model agent that weighs swarm consensus verdicts economically."""
 
     def __init__(self) -> None:
         cfg = get_settings()
+        provider = get_provider()
         super().__init__(
             name="L2_GlobalOrchestrator",
-            model_name=cfg.smart_model_name,
+            model_name=provider.resolve_model("smart"),
             temperature=cfg.model_temperature,
         )
         self._fp_cost = cfg.fp_cost
@@ -36,10 +45,10 @@ class GlobalOrchestrator(BaseAgent):
     def decide(
         self,
         dossier: EntityDossier,
-        swarm_verdicts: list[AgentVerdict],
+        swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict],
         rag_examples: list[dict] | None = None,
     ) -> AgentVerdict:
-        """Synthesise swarm votes into a final verdict."""
+        """Synthesise swarm consensus into a final verdict."""
         return self.analyze(dossier, rag_examples, _swarm_verdicts=swarm_verdicts)
 
     def analyze(  # type: ignore[override]
@@ -47,7 +56,7 @@ class GlobalOrchestrator(BaseAgent):
         dossier: EntityDossier,
         rag_examples: list[dict] | None = None,
         *,
-        _swarm_verdicts: list[AgentVerdict] | None = None,
+        _swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict] | None = None,
     ) -> AgentVerdict:
         """Override to inject swarm verdicts into the prompt."""
         self._pending_swarm = _swarm_verdicts or []
@@ -60,11 +69,8 @@ class GlobalOrchestrator(BaseAgent):
     ) -> str:
         swarm = self._pending_swarm
 
-        verdict_lines = "\n".join(
-            f"- **{v.agent_name}**: prediction={v.prediction}, "
-            f"confidence={v.confidence:.2f}, reasoning={v.reasoning}"
-            for v in swarm
-        )
+        # Format verdicts — use consensus format if available
+        verdict_lines = self._format_verdicts(swarm)
 
         rag_section = ""
         if rag_examples:
@@ -92,7 +98,7 @@ class GlobalOrchestrator(BaseAgent):
         # Inline fallback
         return (
             f"## Global Decision for Entity '{dossier.entity_id}'\n\n"
-            f"### Swarm Agent Verdicts\n{verdict_lines}\n\n"
+            f"### Swarm Consensus Verdicts\n{verdict_lines}\n\n"
             f"### Entity Profile\n"
             f"```json\n{json.dumps(dossier.profile_data, default=str, indent=2)}\n```\n\n"
             f"### Context\n{dossier.context_data[:2000] if dossier.context_data else 'N/A'}\n\n"
@@ -104,3 +110,22 @@ class GlobalOrchestrator(BaseAgent):
             f"Respond with JSON: "
             f'{{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}'
         )
+
+    @staticmethod
+    def _format_verdicts(verdicts: list) -> str:
+        """Format verdicts with consensus info when available."""
+        lines = []
+        for v in verdicts:
+            if isinstance(v, SwarmConsensus):
+                lines.append(
+                    f"- **{v.role.title()} Consensus** (N={v.n_agents}): "
+                    f"prediction={v.prediction}, agreement={v.agreement_ratio:.0%}, "
+                    f"confidence={v.confidence:.2f}, complexity={v.complexity_score:.2f}\n"
+                    f"  Reasoning: {v.reasoning}"
+                )
+            else:
+                lines.append(
+                    f"- **{v.agent_name}**: prediction={v.prediction}, "
+                    f"confidence={v.confidence:.2f}, reasoning={v.reasoning}"
+                )
+        return "\n".join(lines)

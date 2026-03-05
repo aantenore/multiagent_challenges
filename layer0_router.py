@@ -122,9 +122,14 @@ class DeterministicRouter:
         self,
         entity_id: str,
         features: dict[str, float],
-    ) -> AgentVerdict | None:
-        """Return an AgentVerdict if confident, else None (escalate)."""
+    ) -> tuple[AgentVerdict | None, float]:
+        """Return (AgentVerdict | None, complexity_score).
+
+        If confident, returns (verdict, 0.0).
+        If uncertain (escalate), returns (None, complexity_score).
+        """
         verdict, conf = self.predict_one(features)
+        complexity = self.get_complexity(features)
         if verdict is not None:
             return AgentVerdict(
                 agent_name="L0_DeterministicRouter",
@@ -135,8 +140,23 @@ class DeterministicRouter:
                     f"{'above' if verdict == 1 else 'below'} thresholds "
                     f"[{self._lower}, {self._upper}]"
                 ),
-            )
-        return None
+            ), 0.0
+        return None, complexity
+
+    def get_complexity(self, features: dict[str, float]) -> float:
+        """Return a complexity score in [0.0, 1.0].
+
+        1 - 2 * |proba - 0.5| maps probabilities to complexity:
+          proba=0.5  → complexity=1.0  (maximally uncertain)
+          proba=0.0  → complexity=0.0  (fully certain class 0)
+          proba=1.0  → complexity=0.0  (fully certain class 1)
+
+        If the model is not fitted, returns 1.0 (maximum complexity).
+        """
+        if not self._is_fitted:
+            return 1.0
+        _, conf_positive = self.predict_one(features)
+        return 1.0 - 2.0 * abs(conf_positive - 0.5)
 
     # ── Private ─────────────────────────────────────────────────────────
 

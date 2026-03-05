@@ -37,12 +37,30 @@ def main() -> None:
     args = parser.parse_args()
 
     # ── Logging setup ───────────────────────────────────────────────
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(message)s",
-        datefmt="[%X]",
-        handlers=[RichHandler(rich_tracebacks=True, console=Console(stderr=True))],
+    from datetime import datetime
+    import os
+    from pathlib import Path
+
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / datetime.now().strftime("session_%Y%m%d_%H%M%S.log")
+
+    # Console handler respects --log-level
+    console_handler = RichHandler(rich_tracebacks=True, console=Console(stderr=True))
+    console_handler.setLevel(getattr(logging, args.log_level))
+
+    # File handler is ALWAYS DEBUG for troubleshooting
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(
+        logging.Formatter("[%(asctime)s] %(name)s [%(levelname)s] %(message)s")
     )
+
+    logging.basicConfig(
+        level=logging.DEBUG,  # Root logger must be DEBUG to feed the file handler
+        handlers=[console_handler, file_handler],
+    )
+    logging.info("Detailed logs written to %s", log_file)
 
     # ── Run pipeline ────────────────────────────────────────────────
     from pipeline import AdaptivePipeline

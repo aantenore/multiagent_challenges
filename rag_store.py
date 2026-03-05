@@ -59,20 +59,25 @@ class RAGStore:
 
     # ── Write ───────────────────────────────────────────────────────────
 
-    def add_error_case(
+    def add_case(
         self,
         entity_id: str,
         dossier_summary: str,
         true_label: int,
         predicted_label: int,
     ) -> None:
-        """Store a misclassified case for future few-shot retrieval."""
+        """Store an evaluated case for future few-shot retrieval.
+
+        Saves both correct classifications and errors to provide balanced examples.
+        """
         if not self._enabled or self._collection is None:
             return
 
         doc_id = hashlib.sha256(
             f"{entity_id}:{true_label}:{predicted_label}".encode()
         ).hexdigest()[:16]
+
+        is_error = true_label != predicted_label
 
         self._collection.upsert(
             ids=[doc_id],
@@ -82,12 +87,18 @@ class RAGStore:
                     "entity_id": entity_id,
                     "true_label": true_label,
                     "predicted_label": predicted_label,
+                    "is_error": is_error,
                     "summary": dossier_summary[:500],
                 }
             ],
         )
-        logger.info("RAG: stored error case for %s (true=%d, pred=%d)",
-                     entity_id, true_label, predicted_label)
+        logger.info(
+            "RAG: stored case for %s (true=%d, pred=%d, is_error=%s)",
+            entity_id, true_label, predicted_label, is_error
+        )
+        logger.debug(
+            "RAG Payload for %s:\n%s", entity_id, dossier_summary
+        )
 
     # ── Read ────────────────────────────────────────────────────────────
 
@@ -116,6 +127,11 @@ class RAGStore:
         for meta in metadatas[0]:
             examples.append(meta)
 
+        logger.debug(
+            "RAG Query returned %d examples. Top case: %s",
+            len(examples),
+            examples[0].get("entity_id") if examples else "None"
+        )
         return examples
 
     # ── Helpers ─────────────────────────────────────────────────────────

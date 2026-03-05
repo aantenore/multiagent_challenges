@@ -1,6 +1,6 @@
 ## Global Decision for Entity '{entity_id}'
 
-### Swarm Agent Verdicts
+### Swarm Consensus Verdicts
 {verdict_lines}
 
 ### Entity Profile
@@ -23,10 +23,14 @@
 - FN is {fn_ratio:.0f}× worse than FP.
 
 ### Instructions
-1. Weigh each agent's verdict by their confidence and domain relevance.
+1. Each verdict above comes from a **Role Coordinator** that ran multiple expert agents. Pay attention to:
+   - **Agreement ratio** — how many agents within each role agree (higher = stronger signal).
+   - **Confidence** — the consensus confidence for that role.
+   - **Complexity** — higher complexity means the case is harder; weight these roles more carefully.
 2. Consider the asymmetric cost: err on the side of flagging (prediction=1) when uncertain.
-3. Look for consensus among agents — if multiple agents flag concerns, the evidence is strong.
+3. Look for cross-role consensus — if multiple roles flag concerns, the evidence is very strong.
 4. Even ONE strong signal (e.g., emergency visit, specialist consultation, sharp metric decline) should bias toward prediction=1.
-5. Provide your final prediction.
+5. A role with low agreement but high complexity suggests genuine ambiguity — apply extra caution.
+6. Provide your final prediction.
 
 Respond with JSON: {"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}

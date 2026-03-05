@@ -130,6 +130,33 @@ class AgentVerdict(BaseModel):
     )
 
 
+# ── Swarm Consensus ─────────────────────────────────────────────────────
+
+class SwarmConsensus(AgentVerdict):
+    """Aggregated verdict from a RoleCoordinator's swarm.
+
+    Extends AgentVerdict with voting metadata so the Orchestrator
+    can weigh the consensus strength of each role's swarm.
+    """
+
+    role: str = Field(..., description="The data role this consensus covers")
+    n_agents: int = Field(
+        default=1, ge=1, description="Number of agents that voted"
+    )
+    agreement_ratio: float = Field(
+        default=1.0, ge=0.0, le=1.0,
+        description="Fraction of agents that agree with the majority prediction",
+    )
+    complexity_score: float = Field(
+        default=0.0, ge=0.0, le=1.0,
+        description="Assessed complexity for this role (0=trivial, 1=maximally ambiguous)",
+    )
+    individual_verdicts: list[AgentVerdict] = Field(
+        default_factory=list,
+        description="Raw verdicts from each agent in the swarm",
+    )
+
+
 # ── Pipeline Result ─────────────────────────────────────────────────────
 
 class PipelineResult(BaseModel):

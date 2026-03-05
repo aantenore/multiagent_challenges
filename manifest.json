@@ -6,7 +6,7 @@
             "ground_truth": "",
             "training_sources": [
                 {
-                    "path": "resources/training/public_lev_1/status 2.csv",
+                    "path": "resources/case_1/training/public_lev_1/status 2.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
                     "description": "Level 1 training health events.",
                     "columns": {
@@ -20,13 +20,13 @@
                     }
                 },
                 {
-                    "path": "resources/training/public_lev_1/locations 2.json",
+                    "path": "resources/case_1/training/public_lev_1/locations 2.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
                     "description": "Level 1 training GPS pings.",
                     "columns": {"user_id": "Citizen ID", "timestamp": "ISO-8601", "lat": "Latitude", "lng": "Longitude", "city": "City name"}
                 },
                 {
-                    "path": "resources/training/public_lev_1/users 2.json",
+                    "path": "resources/case_1/training/public_lev_1/users 2.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
                     "description": "Level 1 training demographic profiles.",
                     "columns": {"user_id": "Citizen ID", "birth_year": "Year of birth", "job": "Occupation", "residence": "Object with city, lat, lng"}
@@ -34,17 +34,17 @@
             ],
             "evaluation_sources": [
                 {
-                    "path": "resources/evaluation/public_lev_1/status_new.csv",
+                    "path": "resources/case_1/evaluation/public_lev_1/status_new.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
                     "description": "Level 1 evaluation health events."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_1/locations 3.json",
+                    "path": "resources/case_1/evaluation/public_lev_1/locations 3.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
                     "description": "Level 1 evaluation GPS pings."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_1/users 3.json",
+                    "path": "resources/case_1/evaluation/public_lev_1/users 3.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
                     "description": "Level 1 evaluation profiles."
                 }
@@ -56,44 +56,44 @@
             "ground_truth": "",
             "training_sources": [
                 {
-                    "path": "resources/training/public_lev_2/public_lev_2/status.csv",
+                    "path": "resources/case_1/training/public_lev_2/public_lev_2/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
                     "description": "Level 2 training health events."
                 },
                 {
-                    "path": "resources/training/public_lev_2/public_lev_2/locations.json",
+                    "path": "resources/case_1/training/public_lev_2/public_lev_2/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
                     "description": "Level 2 training GPS pings."
                 },
                 {
-                    "path": "resources/training/public_lev_2/public_lev_2/users.json",
+                    "path": "resources/case_1/training/public_lev_2/public_lev_2/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
                     "description": "Level 2 training profiles."
                 },
                 {
-                    "path": "resources/training/public_lev_2/public_lev_2/personas.md",
+                    "path": "resources/case_1/training/public_lev_2/public_lev_2/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
                     "description": "Level 2 training persona narratives with behavioral and health context."
                 }
             ],
             "evaluation_sources": [
                 {
-                    "path": "resources/evaluation/public_lev_2/public_lev_2/status.csv",
+                    "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
                     "description": "Level 2 evaluation health events."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_2/public_lev_2/locations.json",
+                    "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
                     "description": "Level 2 evaluation GPS pings."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_2/public_lev_2/users.json",
+                    "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
                     "description": "Level 2 evaluation profiles."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_2/public_lev_2/personas.md",
+                    "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
                     "description": "Level 2 evaluation persona narratives."
                 }
@@ -105,44 +105,44 @@
             "ground_truth": "",
             "training_sources": [
                 {
-                    "path": "resources/training/public_lev_3/public_lev_3/status.csv",
+                    "path": "resources/case_1/training/public_lev_3/public_lev_3/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
                     "description": "Level 3 training health events."
                 },
                 {
-                    "path": "resources/training/public_lev_3/public_lev_3/locations.json",
+                    "path": "resources/case_1/training/public_lev_3/public_lev_3/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
                     "description": "Level 3 training GPS pings."
                 },
                 {
-                    "path": "resources/training/public_lev_3/public_lev_3/users.json",
+                    "path": "resources/case_1/training/public_lev_3/public_lev_3/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
                     "description": "Level 3 training profiles."
                 },
                 {
-                    "path": "resources/training/public_lev_3/public_lev_3/personas.md",
+                    "path": "resources/case_1/training/public_lev_3/public_lev_3/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
                     "description": "Level 3 training persona narratives."
                 }
             ],
             "evaluation_sources": [
                 {
-                    "path": "resources/evaluation/public_lev_3/public_lev_3/status.csv",
+                    "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
                     "description": "Level 3 evaluation health events."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_3/public_lev_3/locations.json",
+                    "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
                     "description": "Level 3 evaluation GPS pings."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_3/public_lev_3/users.json",
+                    "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
                     "description": "Level 3 evaluation profiles."
                 },
                 {
-                    "path": "resources/evaluation/public_lev_3/public_lev_3/personas.md",
+                    "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
                     "description": "Level 3 evaluation persona narratives."
                 }

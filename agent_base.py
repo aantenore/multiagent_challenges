@@ -1,6 +1,7 @@
 """
 Base agent interface for all LLM-powered agents (Layer 1 & 2).
 Handles retries, structured JSON parsing, and Langfuse observation.
+Uses the modular LLM provider (OpenAI / Gemini / custom).
 """
 
 from __future__ import annotations
@@ -11,8 +12,8 @@ import re
 from abc import ABC, abstractmethod
 
 from langfuse.decorators import observe
-from openai import OpenAI
 
+from llm_provider import get_provider
 from models import AgentVerdict, EntityDossier
 from prompt_loader import load_prompt
 from settings import get_settings
@@ -35,10 +36,14 @@ class BaseAgent(ABC):
     ) -> None:
         cfg = get_settings()
         self.name = name
-        self.model_name = model_name or cfg.cheap_model_name
+        self._provider = get_provider()
+        # If no explicit model_name, resolve from provider
+        if model_name:
+            self.model_name = model_name
+        else:
+            self.model_name = self._provider.resolve_model("cheap")
         self.temperature = temperature if temperature is not None else cfg.model_temperature
         self.max_retries = max_retries or cfg.max_agent_retries
-        self._client = OpenAI(api_key=cfg.openai_api_key)
 
     # ── Abstract ────────────────────────────────────────────────────────
 
@@ -94,22 +99,18 @@ class BaseAgent(ABC):
     # ── LLM call ────────────────────────────────────────────────────────
 
     def _call_llm(self, prompt: str) -> str:
-        # Load configurable prompts from prompts/ directory
+        """Call the configured LLM provider."""
         system_text = load_prompt("system")
         domain_text = load_prompt("domain")
         system_msg = f"{system_text}\n\n{domain_text}".strip()
 
-        resp = self._client.chat.completions.create(
+        return self._provider.chat(
+            system_message=system_msg,
+            user_message=prompt,
             model=self.model_name,
             temperature=self.temperature,
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"},
+            json_mode=True,
         )
-        content = resp.choices[0].message.content or "{}"
-        return content
 
     # ── Parsing ─────────────────────────────────────────────────────────
 
