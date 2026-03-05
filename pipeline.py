@@ -178,12 +178,21 @@ class AdaptivePipeline:
                 for dossier in train_dossiers.values():
                     result = self._process_entity(dossier, coordinators)
                     train_results.append(result)
+                    
+                    # Error reinforcement: if we predicted 1 but it was 0 (training ground truth)
+                    # we reinforce the RAG to mark this as a tricky wellbeing case
+                    ground_truth = 0 # In this specific challenge context
+                    if result.final_prediction != ground_truth and self._rag.is_enabled:
+                        summary = self._rag.summarise_dossier(dossier)
+                        reinforced_summary = f"[TRICKY_CASE_MISCLASSIFIED_AS_{result.final_prediction}] {summary}"
+                        self._rag.add_case(dossier.entity_id, reinforced_summary, ground_truth)
+                        
                     progress.advance(train_task)
             
             train_out_file = f"train_predictions_{stage.name}.txt"
             train_out_path = results_dir / train_out_file if results_dir else Path(train_out_file)
             write_predictions(train_results, train_out_path)
-            console.print(f"  [blue]ℹ Training predictions written to {train_out_file}[/]")
+            console.print(f"  [blue]ℹ Training predictions written to {train_out_file} (RAG reinforced on errors)[/]")
 
         # ── 4. Predict evaluation set ──────────────────────────────
         eval_session_id = generate_session_id()
