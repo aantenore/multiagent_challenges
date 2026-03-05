@@ -99,25 +99,59 @@ class BaseAgent(ABC):
         domain_text = load_prompt("domain")
         system_msg = f"{system_text}\n\n{domain_text}".strip()
 
+        # Disable json_mode to allow the new expert text-based format
         return self._provider.chat(
             system_message=system_msg,
             user_message=prompt,
             model=self.model_name,
             temperature=self.temperature,
-            json_mode=True,
+            json_mode=False,
             callbacks=callbacks,
         )
 
     # ── Parsing ─────────────────────────────────────────────────────────
 
-    def _parse_verdict(self, raw_json: str) -> AgentVerdict:
-        """Parse raw LLM output into a validated AgentVerdict."""
-        # Strip markdown fences if present
-        cleaned = re.sub(r"```(?:json)?\s*", "", raw_json).strip().rstrip("`")
-        data = json.loads(cleaned)
-        return AgentVerdict(
-            agent_name=self.name,
-            prediction=int(data["prediction"]),
-            confidence=float(data["confidence"]),
-            reasoning=str(data.get("reasoning", "")),
-        )
+    def _parse_verdict(self, raw_output: str) -> AgentVerdict:
+        """Parse raw LLM output into a validated AgentVerdict.
+        
+        Supports both traditional JSON and the new KV Expert format:
+        REASONING: ...
+        CONFIDENCE: ...
+        PREDICTION: ...
+        """
+        cleaned = re.sub(r"```(?:json)?\s*", "", raw_output).strip().rstrip("`")
+
+        # 1. Try JSON first
+        try:
+            data = json.loads(cleaned)
+            return AgentVerdict(
+                agent_name=self.name,
+                prediction=int(data["prediction"]),
+                confidence=float(data["confidence"]),
+                reasoning=str(data.get("reasoning", "")),
+            )
+        except (json.JSONDecodeError, KeyError):
+            # 2. Fallback to Expert KV Format (REASONING: ... CONFIDENCE: ... PREDICTION: ...)
+            try:
+                # Regex to extract blocks. reasoning can be multi-line.
+                # Format: 
+                # REASONING: <text> 
+                # CONFIDENCE: <float>
+                # PREDICTION: <int>
+                reasoning = re.search(r"REASONING:\s*(.*?)\s*(?=CONFIDENCE:|$)", cleaned, re.DOTALL | re.IGNORECASE)
+                confidence = re.search(r"CONFIDENCE:\s*([\d.]+)", cleaned, re.IGNORECASE)
+                prediction = re.search(r"PREDICTION:\s*([01])", cleaned, re.IGNORECASE)
+
+                if confidence and prediction:
+                    return AgentVerdict(
+                        agent_name=self.name,
+                        prediction=int(prediction.group(1)),
+                        confidence=float(confidence.group(1)),
+                        reasoning=reasoning.group(1).strip() if reasoning else "",
+                    )
+            except Exception as e:
+                logger.error("Failed to parse Expert KV format: %s", e)
+
+        # 3. Final Fallback: if it's garbage but we need to proceed
+        logger.error("All parsing failed for output: %s", cleaned)
+        raise ValueError(f"Could not parse agent output: {cleaned}")

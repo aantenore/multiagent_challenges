@@ -32,9 +32,11 @@ You will receive two types of data:
 ### Ground Truth Reference (RAG)
 {rag_section}
 
-Respond with JSON ONLY in this format: 
-{{
-  "prediction": 0 or 1, 
-  "confidence": 0.0-1.0, 
-  "reasoning": "Briefly state: 1. L0 Alignment (Math) | 2. Context Alignment (Text) | 3. Synthesis (Conclusion)"
-}}
+### OUTPUT FORMAT
+Provide your response strictly in the following format:
+REASONING:
+- L0 Alignment: [Briefly state what the long-term math shows]
+- Context Alignment: [Briefly state how recent text/logs confirm or contradict the math]
+- Synthesis: [Explain why this is an anomaly or a normal lifestyle pattern]
+CONFIDENCE: [0.0 to 1.0]
+PREDICTION: [1 or 0]
