@@ -92,6 +92,12 @@ def main() -> None:
                 f"  [bold]{stage_name}:[/] {flagged}/{len(results)} flagged"
             )
         c.print("\n[bold green]All stages complete.[/]")
+        
+        try:
+            from pipeline import langfuse_context
+            langfuse_context.flush()
+        except ImportError:
+            pass
 
     except Exception as exc:
         Console().print(f"[bold red]Pipeline failed:[/] {exc}")

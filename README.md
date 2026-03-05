@@ -75,7 +75,7 @@ If the series is too short or irregular to find an ACF peak, it seamlessly falls
 
 ### Layer 0 — IsolationForest One-Class Engine
 
-- **Fit phase:** Trained ONLY on class-0 (well-being) training data.
+- **Fit phase:** Trained on all available training data (which inherently represents the class-0 standard monitoring baseline).
 - **Predict phase:**
   - **Inlier** (inside boundary) → emit `pred=0` at zero LLM cost.
   - **Outlier** (outside boundary) → escalate to L1 with `DetectionMetadata` (deviating features, IF score).
