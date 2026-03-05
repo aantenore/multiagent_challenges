@@ -37,8 +37,18 @@ class GlobalOrchestrator(BaseAgent):
         dossier: EntityDossier,
         swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict],
         rag_examples: list[dict] | None = None,
+        model_category: str = "smart",
     ) -> AgentVerdict:
-        """Synthesise swarm consensus into a final verdict."""
+        """Synthesise swarm consensus into a final verdict.
+        
+        Args:
+            dossier: The entity data.
+            swarm_verdicts: List of verdicts from L1.
+            rag_examples: Similar cases from RAG.
+            model_category: "smart" or "cheap" model to use for this decision.
+        """
+        from llm_provider import get_provider
+        self.model_name = get_provider().resolve_model(model_category)
         return self.analyze(dossier, rag_examples, _swarm_verdicts=swarm_verdicts)
 
     def analyze(  # type: ignore[override]
