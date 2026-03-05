@@ -111,15 +111,15 @@ class DomainAgent(BaseAgent):
         """Return the JSON-serialised data slice for this role."""
         match self.role:
             case "temporal":
-                # Reduced from 20 to 10 events for token efficiency
+                # Reduced to 10 events for token efficiency
                 data = dossier.temporal_data[-10:]  
             case "spatial":
-                # Reduced from 30 to 15 locations for token efficiency
+                # Reduced to 15 locations for token efficiency
                 data = dossier.spatial_data[-15:]  
             case "profile":
                 data = dossier.profile_data
             case "context":
-                # Reduced from 3000 to 1500 chars for token efficiency
+                # Reduced to 1500 chars for token efficiency
                 return dossier.context_data[:1500]
             case _:
                 data = {}
