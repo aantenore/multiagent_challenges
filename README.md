@@ -185,15 +185,15 @@ cp .env.example .env
 |----------|---------|-------------|
 | `SWARM_MIN_AGENTS` | `1` | Minimum agents per role coordinator |
 | `SWARM_MAX_AGENTS` | `5` | Maximum agents per role coordinator |
-| `SWARM_COMPLEXITY_THRESHOLD` | `0.3` | Complexity below this → min agents |
-| `SWARM_TEMP_SPREAD` | `0.15` | Temperature variation between swarm agents |
+| `SWARM_COMPLEXITY_THRESHOLD` | `0.4` | Complexity below this → min agents |
+| `SWARM_TEMP_SPREAD` | `0.50` | Temperature variation between swarm agents |
 
 **Pipeline hyperparameters:**
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FP_COST` | `1.0` | False Positive cost weight |
+| `FP_COST` | `3.0` | False Positive cost weight |
 | `FN_COST` | `5.0` | False Negative cost weight |
-| `TOP_K_RAG` | `3` | Number of RAG few-shot examples |
+| `TOP_K_RAG` | `5` | Number of RAG few-shot examples |
 
 **Optional observability:**
 | Variable | Description |

@@ -55,12 +55,12 @@ class Settings(BaseSettings):
     # ── Swarm Configuration ──────────────────────────────────────────────
     swarm_min_agents: int = 1
     swarm_max_agents: int = 5
-    swarm_complexity_threshold: float = 0.3
-    swarm_temp_spread: float = 0.05
+    swarm_complexity_threshold: float = 0.4
+    swarm_temp_spread: float = 0.50
 
     # ── RAG Configuration ───────────────────────────────────────────────
     rag_collection_name: str = "case_memory"
-    top_k_rag: int = 3
+    top_k_rag: int = 5
     rag_db_path: str = "./chroma_db"
 
     # ── Validators ──────────────────────────────────────────────────────
