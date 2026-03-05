@@ -1,5 +1,6 @@
 import os
 import ulid
+import contextvars
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,14 +21,13 @@ def generate_session_id():
     team_name = os.getenv("TEAM_NAME", "A(CC)I-Tua")
     return f"{team_name}-{ulid.new().str}"
 
-_CURRENT_SESSION_ID = generate_session_id()
+_SESSION_ID_VAR = contextvars.ContextVar("session_id", default=generate_session_id())
 
 def set_current_session_id(session_id: str):
-    global _CURRENT_SESSION_ID
-    _CURRENT_SESSION_ID = session_id
+    _SESSION_ID_VAR.set(session_id)
 
 def get_current_session_id():
-    return _CURRENT_SESSION_ID
+    return _SESSION_ID_VAR.get()
 
 def invoke_langchain(model, system_message, prompt, langfuse_handler):
     """Invoke LangChain with the given prompt and Langfuse handler."""
