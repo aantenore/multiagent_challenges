@@ -59,6 +59,7 @@ class BaseAgent(ABC):
         self,
         dossier: EntityDossier,
         rag_examples: list[dict],
+        **kwargs,
     ) -> str:
         """Build the full user-side prompt for the LLM.
 
@@ -74,10 +75,11 @@ class BaseAgent(ABC):
         self,
         dossier: EntityDossier,
         rag_examples: list[dict] | None = None,
+        **kwargs,
     ) -> AgentVerdict:
         """Call the LLM and return a validated AgentVerdict."""
         rag_examples = rag_examples or []
-        prompt = self._build_prompt(dossier, rag_examples)
+        prompt = self._build_prompt(dossier, rag_examples, **kwargs)
 
         for attempt in range(1, self.max_retries + 1):
             try:

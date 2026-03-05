@@ -2,12 +2,12 @@
 
 A production-ready, domain-agnostic **N-stage multi-agent classification pipeline** built for the **Reply Mirror Challenge**.
 
-The system ingests heterogeneous data described by a `manifest.json`, processes N stages of cumulative training + evaluation, and classifies entities as:
+The system ingests heterogeneous data described by a `manifest.json`, processes N stages of **per-level** training + evaluation, and classifies entities as:
 
 | Label | Meaning |
 |-------|---------|
-| `0` | Standard monitoring (trajectory acceptable) |
-| `1` | Preventive support needed (deviation detected) |
+| `0` | Standard monitoring (well-being — trajectory acceptable) |
+| `1` | Preventive support needed (anomaly detected) |
 
 **Objective:** Maximise `(F1-Score + Value Recovery) / 2` with asymmetric cost awareness (False Negatives ≫ False Positives).
 
@@ -19,34 +19,35 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
 ┌─────────────────────────────────────────────────────────┐
 │                  manifest.json                          │
 │   N stages: [train₁,eval₁] → [train₂,eval₂] → ...     │
+│   Each level is SELF-CONTAINED (no cross-level data)    │
 └──────────────────────┬──────────────────────────────────┘
                        ▼
           ┌─────────────────────────┐
-          │  Cumulative Training    │  stages 0..i accumulated
+          │  Per-Level Training     │  train_i only (class 0 = well-being)
           │  DossierBuilder         │
           └────────────┬────────────┘
                        ▼
          ┌──────────────────────────┐
-         │  Feature Engineering    │  sliding windows, spatial stats
+         │  Feature Engineering    │  sliding windows, MA3/MA7, slope
          └────────────┬────────────┘
                       ▼
          ┌──────────────────────────┐
-         │  Layer 0 — Anomaly Router │  Z-Score / IsolationForest
-         │  + Complexity Score       │  High-confidence → instant verdict
+         │  Layer 0 — IsolationForest│  One-Class engine
+         │  + DetectionMetadata      │  Fit on class-0 only
          └─────┬───────────┬────────┘
-       certain│           │uncertain + complexity_score
-              ▼           ▼
-           OUTPUT   ┌──────────────────────────────────┐
-                    │  Layer 1 — Per-Role Coordinators  │
-                    │  RoleCoordinator("temporal")      │
-                    │    ├─ assess_complexity → N       │
-                    │    ├─ spawn 1..5 DomainAgents     │
-                    │    ├─ varied temperatures         │
-                    │    └─ aggregate → SwarmConsensus  │
-                    │  RoleCoordinator("spatial")  → ⬤ │
-                    │  RoleCoordinator("profile")  → ⬤ │
-                    │  RoleCoordinator("context")  → ⬤ │
-                    └──────────┬───────────────────────┘
+       inlier  │           │outlier + DetectionMetadata
+               ▼           ▼
+            OUTPUT   ┌──────────────────────────────────┐
+          (pred=0)   │  Layer 1 — Anti-FP Filter         │
+                     │  RoleCoordinator("temporal")      │
+                     │    ├─ assess_complexity → N       │
+                     │    ├─ spawn 1..5 DomainAgents     │
+                     │    ├─ read L0 math details        │
+                     │    └─ aggregate → SwarmConsensus  │
+                     │  RoleCoordinator("spatial")  → ⬤ │
+                     │  RoleCoordinator("profile")  → ⬤ │
+                     │  RoleCoordinator("context")  → ⬤ │
+                     └──────────┬───────────────────────┘
                                ▼ list[SwarmConsensus]
                     ┌──────────────────────────┐
                     │  Layer 2 — Orchestrator   │
@@ -57,10 +58,23 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
                             OUTPUT → predictions_{stage}.txt
                                │
                     ┌──────────▼───────┐
-                     │  Layer 3 — RAG   │  ChromaDB: stores all cases
-                     │  for next stage  │  (self-supervised when no labels)
+                    │  RAG (per-level) │  ChromaDB: reset between levels
                     └──────────────────┘
 ```
+
+### Layer 0 — IsolationForest One-Class Engine
+
+- **Fit phase:** Trained ONLY on class-0 (well-being) training data.
+- **Predict phase:**
+  - **Inlier** (inside boundary) → emit `pred=0` at zero LLM cost.
+  - **Outlier** (outside boundary) → escalate to L1 with `DetectionMetadata` (deviating features, IF score).
+
+### Layer 1 — Anti-False-Positive Filter (LLM Agents)
+
+L1 agents do NOT discover anomalies in numbers (L0 does that). They act as **contextual false-positive filters**:
+- Read the persona, profile, and lifestyle context.
+- If the mathematical deviation is **justified** by life context → output `0`.
+- If NOT justified → confirm `1` (preventive support).
 
 ### Dynamic Swarm Scaling
 
@@ -76,11 +90,11 @@ Agents within a swarm use **staggered temperatures** for opinion diversity. Vote
 
 ### Parallel Execution
 
-Both **role coordinators** and **agents within each role** execute in parallel using `ThreadPoolExecutor`, maximising throughput and minimising wall-clock time.
+Both **role coordinators** and **agents within each role** execute in parallel using `ThreadPoolExecutor`.
 
-### Cumulative Training
+### Per-Level Training
 
-Each stage `i` trains on **all data from stages 0..i**, then evaluates on stage `i`'s evaluation data. Errors are stored in RAG and used as few-shot examples in subsequent stages.
+Each stage `i` trains on **its own data only** (not cumulative). RAG is reset between levels. Each level is fully self-contained and independent.
 
 ---
 
@@ -90,8 +104,8 @@ The framework supports **switchable LLM backends** via a modular provider system
 
 | Provider | Env Setting | Models |
 |----------|------------|--------|
-| **OpenAI** | `LLM_PROVIDER=openai` | `gpt-4o-mini` (cheap), `gpt-4o` (smart) |
-| **Google Gemini** | `LLM_PROVIDER=gemini` | `gemini-2.0-flash` (cheap), `gemini-2.5-pro-exp-03-25` (smart) |
+| **OpenAI** | `LLM_PROVIDER=openai` | `gpt-5-mini` (cheap), `gpt-5.2` (smart) |
+| **Google Gemini** | `LLM_PROVIDER=gemini` | `gemini-3-flash-preview` (cheap), `gemini-3.1-pro-preview` (smart) |
 
 Switch providers by changing a single `.env` variable — no code changes needed.
 
@@ -146,40 +160,6 @@ cp .env.example .env
 | `GOOGLE_API_KEY` | Google API key (if using Gemini provider) |
 | `LLM_PROVIDER` | Provider to use: `openai` or `gemini` |
 
-**Recommended Model Tuning:**
-The architecture splits processing into high-volume data analysis (Layer 1 Swarms) and low-volume high-reasoning synthesis (Layer 2 Orchestrator). 
-
-- **Layer 1 (Per-Role Swarm Agents - "Cheap")**: Needs high throughput, fast JSON parsing, and good instruction following.
-  - **OpenAI:** `gpt-5-mini` (Very fast, cheap, good JSON support).
-  - **Gemini:** `gemini-3-flash-preview` (Fast, large context window).
-- **Layer 2 (Global Orchestrator - "Smart")**: Needs deep reasoning, consensus conflict resolution, and complex economic balancing.
-  - **OpenAI:** `gpt-5.2` (New fast reasoning model supporting structured JSON outputs) or highly reliable instruction following.
-  - **Gemini:** `gemini-3.1-pro-preview` (Excellent reasoning and synthesis capabilities across multiple contexts).
-
-*Environment variables to set these:*
-| Variable | Default Fallback |
-|----------|-----------------|
-| `CHEAP_MODEL_NAME` | `gpt-5-mini` |
-| `SMART_MODEL_NAME` | `gpt-5.2` |
-| `GEMINI_CHEAP_MODEL_NAME` | `gemini-3-flash-preview` |
-| `GEMINI_SMART_MODEL_NAME` | `gemini-3.1-pro-preview` |
-
-**Optional observability:**
-| Variable | Description |
-|----------|-------------|
-| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
-| `LANGFUSE_SECRET_KEY` | Langfuse secret key |
-| `LANGFUSE_HOST` | Langfuse host URL |
-
-**Model tuning:**
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CHEAP_MODEL_NAME` | `gpt-4o-mini` | OpenAI model for Layer 1 swarm agents |
-| `SMART_MODEL_NAME` | `gpt-4o` | OpenAI model for Layer 2 orchestrator |
-| `GEMINI_CHEAP_MODEL_NAME` | `gemini-2.0-flash` | Gemini model for Layer 1 |
-| `GEMINI_SMART_MODEL_NAME` | `gemini-2.5-pro-exp-03-25` | Gemini model for Layer 2 |
-| `MODEL_TEMPERATURE` | `0.2` | Base temperature for LLM calls |
-
 **Swarm configuration:**
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -187,15 +167,6 @@ The architecture splits processing into high-volume data analysis (Layer 1 Swarm
 | `SWARM_MAX_AGENTS` | `5` | Maximum agents per role coordinator |
 | `SWARM_COMPLEXITY_THRESHOLD` | `0.3` | Complexity below this → min agents |
 | `SWARM_TEMP_SPREAD` | `0.15` | Temperature variation between swarm agents |
-
-**Layer 0 — Hybrid Ensemble Anomaly Detection:**
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ANOMALY_THRESHOLD` | `2.5` | Z-score σ multiplier for univariate anomaly detection |
-| `MIN_HISTORICAL_SAMPLES` | `3` | Min temporal records for valid baseline |
-| `SIGMA_WEIGHT` | `0.6` | Weight for Z-Score detector in ensemble |
-| `FOREST_WEIGHT` | `0.4` | Weight for IsolationForest detector in ensemble |
-| `ANOMALY_THRESHOLD_FOREST` | `-0.1` | IsolationForest decision_function threshold |
 
 **Pipeline hyperparameters:**
 | Variable | Default | Description |
@@ -205,9 +176,16 @@ The architecture splits processing into high-volume data analysis (Layer 1 Swarm
 | `FN_COST` | `5.0` | False Negative cost weight |
 | `TOP_K_RAG` | `3` | Number of RAG few-shot examples |
 
+**Optional observability:**
+| Variable | Description |
+|----------|-------------|
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key |
+| `LANGFUSE_HOST` | Langfuse host URL |
+
 ### 3. Configure manifest.json
 
-The manifest defines **N stages**, each with training and evaluation data sources:
+The manifest defines **N stages**, each with its own training and evaluation data sources:
 
 ```json
 {
@@ -215,18 +193,14 @@ The manifest defines **N stages**, each with training and evaluation data source
         {
             "name": "level_1",
             "output_file": "predictions_lev1.txt",
-            "ground_truth": "",
             "training_sources": [
                 {
-                    "path": "resources/case_1/training/public_lev_1/status 2.csv",
+                    "path": "resources/.../status.csv",
                     "role": "temporal",
                     "id_column": "CitizenID",
                     "format": "csv",
                     "description": "Level 1 training health events.",
-                    "columns": {
-                        "EventType": "Health event type",
-                        "PhysicalActivityIndex": "0-100 activity level"
-                    }
+                    "columns": { ... }
                 }
             ],
             "evaluation_sources": [...]
@@ -235,24 +209,9 @@ The manifest defines **N stages**, each with training and evaluation data source
 }
 ```
 
-**Multi-case support:** Data is organized under `resources/case_N/`:
-
-```
-resources/
-├── case_1/
-│   ├── challenge.pdf
-│   ├── training/
-│   └── evaluation/
-├── case_2/
-│   ├── training/
-│   └── evaluation/
-```
-
-Each case can have its own `manifest_caseN.json`.
-
-> **Scaling / Dynamic Swarms:** Add more stages by appending to the `stages` array. Works with 1, 3, 6, or any number of stages. 
-> 
-> **Zero-Code Swarms:** If a new dataset arrives with a new role (e.g., `"role": "financial"`), simply adding it to the `manifest.json` will **automatically** spawn a new `RoleCoordinator("financial")` and a new dynamic swarm of financial expert agents. No code changes are required.
+> **Configurable stages:** Add more stages by appending to the `stages` array. Works with 1, 3, 6, or any number of stages.
+>
+> **Zero-Code Swarms:** If a new dataset with a new role (e.g., `"role": "financial"`) is added, a new `RoleCoordinator("financial")` spawns automatically. No code changes needed.
 
 ### 4. Run the pipeline
 
@@ -265,12 +224,11 @@ python main.py -m manifest.json --log-level DEBUG
 ```
 
 **What happens per stage:**
-1. **Train:** Cumulative training data (stages 0..i) → build dossiers → engineer features → train L0
-2. **Evaluate:** Stage `i` evaluation data → predict (L0 → L1 coordinators → L2) → write `predictions_{stage}.txt`
-3. **Learn:** All evaluations stored in RAG for next stage's few-shot examples
+1. **Reset:** RAG cleared for level isolation
+2. **Train:** This level's training data → build dossiers → engineer features → fit IsolationForest
+3. **Evaluate:** Level `i` eval data → predict (L0 → L1 anti-FP → L2) → write `predictions_{stage}.txt`
 
 ### 5. Build submission archive
-
 
 ```bash
 python build_submission.py
@@ -286,17 +244,17 @@ python build_submission.py
 | `main.py` | CLI entry point |
 | `settings.py` | Pydantic Settings (loads `.env`) |
 | `llm_provider.py` | **Modular LLM provider** (OpenAI, Gemini, extensible) |
-| `models.py` | Shared Pydantic data models (`Stage`, `Manifest`, `EntityDossier`, `AgentVerdict`, `SwarmConsensus`) |
-| `manifest_manager.py` | Loads `manifest.json`, provides cumulative stage access |
+| `models.py` | Shared Pydantic models (`Stage`, `Manifest`, `EntityDossier`, `DetectionMetadata`, `AgentVerdict`, `SwarmConsensus`) |
+| `manifest_manager.py` | Loads `manifest.json`, provides per-stage access |
 | `data_loader.py` | Multi-format file ingestion (CSV, JSON, MD) |
 | `dossier_builder.py` | Assembles unified entity dossiers from source entries |
-| `feature_engineer.py` | Sliding-window feature extraction |
-| `layer0_router.py` | Layer 0 — **Unsupervised Anomaly Router** (Z-Score / IsolationForest) + complexity scoring |
-| `agent_base.py` | Abstract LLM agent with retries + JSON validation (uses modular provider) |
-| `domain_swarm.py` | Layer 1 — **RoleCoordinator** (dynamic swarm, weighted voting, consensus) |
-| `orchestrator.py` | Layer 2 — Smart model economic decider (reads `SwarmConsensus`) |
-| `rag_store.py` | Layer 3 — ChromaDB local RAG |
-| `pipeline.py` | N-stage cumulative pipeline orchestrator |
+| `feature_engineer.py` | Sliding-window feature extraction (MA3, MA7, slope, velocity) |
+| `layer0_router.py` | Layer 0 — **IsolationForest One-Class engine** (fit on class 0 only) |
+| `agent_base.py` | Abstract LLM agent with retries + JSON validation |
+| `domain_swarm.py` | Layer 1 — **RoleCoordinator** + **Anti-FP Filter** agents |
+| `orchestrator.py` | Layer 2 — Smart model economic decider |
+| `rag_store.py` | ChromaDB local RAG (per-level, reset between stages) |
+| `pipeline.py` | N-stage per-level pipeline orchestrator |
 | `metrics.py` | Evaluation (F1, Value Recovery, Mirror Score) |
 | `output_writer.py` | Generates challenge-compliant TXT output |
 | `prompt_loader.py` | Loads prompt templates from `prompts/` |
@@ -306,20 +264,20 @@ python build_submission.py
 
 ## 🎯 Prompt Configuration
 
-All LLM prompts are **externalized** in the `prompts/` directory. Edit these plain-text files to tune agent behavior **without touching code**:
+All LLM prompts are **externalized** in the `prompts/` directory:
 
 | File | What it controls |
-|------|--------------------|
+|------|---------------------|
 | `prompts/system.txt` | System identity shared by all agents |
 | `prompts/domain.txt` | **Domain context** — describes the operating domain |
-| `prompts/domain_agent.txt` | Layer 1 per-role agent prompt template |
+| `prompts/domain_agent.txt` | Layer 1 anti-FP agent prompt template |
 | `prompts/coordinator.txt` | **Role coordinator** assessment prompt template |
-| `prompts/orchestrator.txt` | Layer 2 orchestrator prompt template (reads consensus) |
+| `prompts/orchestrator.txt` | Layer 2 orchestrator prompt template |
 
 ### Available placeholders
 
-**`domain_agent.txt` / `coordinator.txt`:**
-`{role}`, `{entity_id}`, `{semantic_section}`, `{role_title}`, `{data_slice}`, `{profile_json}`, `{context}`, `{rag_section}`
+**`domain_agent.txt`:**
+`{role}`, `{entity_id}`, `{semantic_section}`, `{role_title}`, `{data_slice}`, `{profile_json}`, `{context}`, `{rag_section}`, `{l0_section}`
 
 **`orchestrator.txt`:**
 `{entity_id}`, `{verdict_lines}`, `{profile_json}`, `{context}`, `{features_json}`, `{rag_section}`, `{fp_cost}`, `{fn_cost}`, `{fn_ratio}`
@@ -327,9 +285,9 @@ All LLM prompts are **externalized** in the `prompts/` directory. Edit these pla
 ### Changing domain
 
 To adapt the framework to a different domain (e.g., financial fraud):
-1. Edit `prompts/domain.txt` — describe the new domain and key signals
-2. Edit `prompts/system.txt` — adjust agent identity if needed
-3. Update `manifest.json` — point to new data files with updated `description` and `columns`
+1. Edit `prompts/domain.txt` — describe the new domain
+2. Edit `prompts/system.txt` — adjust agent identity
+3. Update `manifest.json` — point to new data files
 
 > **Fallback:** if any prompt file is missing, the system uses built-in defaults.
 
@@ -366,11 +324,11 @@ At the end of each stage (if ground truth is provided), the pipeline prints:
 - **Dependencies** (see `requirements.txt`):
   - `pydantic` + `pydantic-settings` — configuration & data validation
   - `pandas` + `numpy` — data manipulation
-  - `scikit-learn` + `scipy` — anomaly detection (Layer 0)
+  - `scikit-learn` — anomaly detection (IsolationForest, Layer 0)
   - `openai` — OpenAI LLM API client
   - `google-genai` — Google Gemini LLM API client
   - `langfuse` — observability & tracing
-  - `chromadb` — local vector database (Layer 3 RAG)
+  - `chromadb` — local vector database (RAG)
   - `rich` — terminal formatting & progress bars
   - `python-dotenv` — `.env` file loading
 

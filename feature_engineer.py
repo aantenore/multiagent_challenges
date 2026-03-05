@@ -104,6 +104,22 @@ class SlidingWindowExtractor:
             else:
                 feats[f"{col}_velocity"] = 0.0
 
+            # ── Moving Averages (3 and 7 day windows) ──
+            if len(all_arr) >= 3:
+                ma3 = float(np.mean(all_arr[-3:]))
+                feats[f"{col}_ma3"] = ma3
+                feats[f"{col}_ma3_deviation"] = float(all_arr[-1] - ma3)
+            if len(all_arr) >= 7:
+                ma7 = float(np.mean(all_arr[-7:]))
+                feats[f"{col}_ma7"] = ma7
+                feats[f"{col}_ma7_deviation"] = float(all_arr[-1] - ma7)
+
+            # ── Linear Slope / Trend ──
+            if len(all_arr) >= 3:
+                x = np.arange(len(all_arr), dtype=float)
+                slope = float(np.polyfit(x, all_arr, 1)[0])
+                feats[f"{col}_slope"] = slope
+
         # Event-type risk encoding
         event_types = [r.get("EventType", "") for r in sorted_rows]
         risk_scores = [self._EVENT_RISK_MAP.get(e, 0) for e in event_types]

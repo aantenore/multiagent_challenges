@@ -135,6 +135,9 @@ def _parse_sections(text: str) -> pd.DataFrame:
         if not entity_id_match:
             continue
         entity_id = entity_id_match.group(1)
+        # Skip markdown artefacts (e.g. '#' from '# Title' lines before first ##)
+        if not re.match(r"^[A-Za-z0-9_]{2,}$", entity_id):
+            continue
         rows.append({
             "entity_id": entity_id,
             "context_text": sec.strip(),

@@ -1,13 +1,13 @@
 """
-AdaptivePipeline — N-stage cumulative multi-agent orchestrator.
+AdaptivePipeline — N-stage per-level multi-agent orchestrator.
 
 For each stage i (0..N-1):
-  1. Build dossiers from CUMULATIVE training data (stages 0..i)
-  2. Engineer features and train L0 (if ground truth available)
+  1. Build dossiers from THIS LEVEL's training data only
+  2. Engineer features and train L0 IsolationForest (class 0 = well-being)
   3. Build dossiers from evaluation data (stage i only)
-  4. Predict: L0 → L1 coordinators (dynamic swarm) → L2 orchestrator
+  4. Predict: L0 → L1 coordinators (anti-FP filter) → L2 orchestrator
   5. Write predictions to stage-specific output file
-  6. Store errors in RAG for next stage
+  6. RAG is reset between levels (each level is self-contained)
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from domain_swarm import RoleCoordinator, SwarmFactory
 from dossier_builder import DossierBuilder
 from feature_engineer import SlidingWindowExtractor
-from layer0_router import AnomalyRouter
+from layer0_router import OneClassRouter
 from manifest_manager import ManifestManager
 from metrics import print_report
 from models import EntityDossier, ManifestEntry, PipelineResult, Stage, SwarmConsensus
@@ -58,7 +58,7 @@ class AdaptivePipeline:
 
     def __init__(self) -> None:
         self._cfg = get_settings()
-        self._router = AnomalyRouter()
+        self._router = OneClassRouter()
         self._rag = RAGStore()
         self._extractor = SlidingWindowExtractor()
         self._orchestrator = GlobalOrchestrator()
@@ -116,24 +116,35 @@ class AdaptivePipeline:
         stage: Stage,
         results_dir: Path | None = None,
     ) -> list[PipelineResult]:
-        """Process one stage: train cumulatively, then evaluate."""
-        # ── 1. Cumulative training ─────────────────────────────────
-        cum_train_sources = manager.cumulative_training_sources(stage_idx)
-        if cum_train_sources:
+        """Process one stage: train on THIS level's data only, then evaluate."""
+        # ── 0. Reset RAG for this level (each level is self-contained) ──
+        if self._rag.is_enabled:
+            self._rag.reset()
+            logger.info("  RAG reset for stage '%s'", stage.name)
+
+        # ── 1. Per-level training ──────────────────────────────────
+        train_sources = stage.training_sources
+        if train_sources:
             console.print(
-                f"  Training: [bold]{len(cum_train_sources)}[/] cumulative sources "
-                f"(stages 0..{stage_idx})"
+                f"  Training: [bold]{len(train_sources)}[/] sources "
+                f"(level: {stage.name})"
             )
-            train_builder = DossierBuilder.from_entries(cum_train_sources, manager.base_dir)
+            train_builder = DossierBuilder.from_entries(train_sources, manager.base_dir)
             train_dossiers = train_builder.build_all()
 
             # Engineer features
             for dossier in train_dossiers.values():
                 dossier.features = self._extractor.extract(dossier)
 
-            # Build L0 baselines (unsupervised — no labels needed)
+            # Build L0 baselines (training = well-being baseline)
             self._router.build_baselines(train_dossiers)
             console.print(f"  [green]✓ L0 baselines built on {len(train_dossiers)} entities[/]")
+
+            # Store training entities in RAG with true_label=0 (well-being)
+            if self._rag.is_enabled:
+                for eid, dossier in train_dossiers.items():
+                    summary = self._rag.summarise_dossier(dossier)
+                    self._rag.add_case(eid, summary, 0, 0)  # true=0, pred=0
 
         # ── 2. Evaluation ──────────────────────────────────────────
         eval_sources = stage.evaluation_sources
@@ -151,8 +162,8 @@ class AdaptivePipeline:
         for dossier in eval_dossiers.values():
             dossier.features = self._extractor.extract(dossier)
 
-        # Create coordinators with semantic metadata from all sources
-        all_entries = cum_train_sources + eval_sources if cum_train_sources else eval_sources
+        # Create coordinators with semantic metadata from this level's sources
+        all_entries = train_sources + eval_sources if train_sources else eval_sources
         coordinators = SwarmFactory.create_coordinators(
             roles={e.role for e in all_entries},
             manifest_entries=all_entries,
@@ -217,14 +228,14 @@ class AdaptivePipeline:
         eid = dossier.entity_id
         verdicts = []
 
-        # Layer 0 — Hybrid Ensemble Anomaly Router
+        # Layer 0 — One-Class Anomaly Engine (SVM + IsolationForest)
         l0_verdict, complexity, detection_meta = self._router.to_verdict(eid, dossier)
         if l0_verdict is not None:
             verdicts.append(l0_verdict)
             return PipelineResult(
                 entity_id=eid,
                 final_prediction=l0_verdict.prediction,
-                layer_decided="L0_HybridRouter",
+                layer_decided="L0_OneClassRouter",
                 verdicts=verdicts,
             )
 

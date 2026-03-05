@@ -1,15 +1,16 @@
 """
-Layer 0 — Hybrid Ensemble Anomaly Meta-Router (Zero-Label Efficiency Engine).
+Layer 0 — One-Class Anomaly Engine (IsolationForest).
 
-Runs Z-Score (univariate) AND IsolationForest (multivariate) simultaneously.
-Uses weighted ensemble to produce a DetectionMetadata object that explains
-*why* a case was escalated, enabling L1 agents to focus on flagged signals.
+Architecture:
+- **Fit phase:** Trains ONLY on class-0 (well-being) training data,
+  learning the decision boundary of "normal behaviour".
+- **Predict phase:** New entities are classified as:
+  - Inlier (inside boundary) → emit pred=0 at zero LLM cost.
+  - Outlier (outside boundary) → escalate to L1 with math details.
 
-Routing logic ("The Switch"):
-- Both silent  → verdict=0 (standard monitoring, 0 LLM tokens, 100% saving)
-- Z-Score only → "Statistical anomaly on [SENSOR]"  → escalate to L1
-- Forest only  → "Multi-factor behavioural deviation"  → escalate to L1
-- Both fire    → combined report → escalate to L1
+L1 agents act as Anti-False-Positive Filters: they read the context
+(personas, profile, users) and decide whether the L0 anomaly is
+justified by life context. If justified → 0. If not → confirm 1.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from typing import Any
 
 import numpy as np
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 from models import AgentVerdict, DetectionMetadata, EntityDossier
 from settings import get_settings
@@ -26,282 +28,178 @@ from settings import get_settings
 logger = logging.getLogger(__name__)
 
 
-# ── Feature columns used for baseline computation ───────────────────────
-_BASELINE_COLS = [
-    "PhysicalActivityIndex",
-    "SleepQualityIndex",
-    "EnvironmentalExposureLevel",
-]
-
-
-class AnomalyRouter:
-    """Hybrid Ensemble Meta-Router: Z-Score + IsolationForest.
+class OneClassRouter:
+    """One-Class Anomaly Engine: IsolationForest.
 
     Workflow
     --------
     1. ``build_baselines(train_dossiers)``
-       - Compute per-entity μ/σ from temporal data (Z-Score baselines).
-       - Train population-level IsolationForest on feature matrix.
+       - Extract feature vectors from ALL training entities (class 0).
+       - Fit StandardScaler → IsolationForest.
     2. ``to_verdict(entity_id, dossier)``
-       - Run BOTH detectors simultaneously.
-       - Ensemble score = sigma_weight × z_score + forest_weight × forest_score.
-       - Emit verdict + DetectionMetadata for L1 explainability.
+       - Extract same features for the eval entity.
+       - IsolationForest: inlier → emit 0; outlier → escalate with details.
     """
 
     def __init__(self) -> None:
-        cfg = get_settings()
-        self._threshold_sigma: float = cfg.anomaly_threshold
-        self._threshold_forest: float = cfg.anomaly_threshold_forest
-        self._min_samples: int = cfg.min_historical_samples
-        self._sigma_weight: float = cfg.sigma_weight
-        self._forest_weight: float = cfg.forest_weight
-
-        # Per-entity baselines: {entity_id: {col: (mean, std)}}
-        self._baselines: dict[str, dict[str, tuple[float, float]]] = {}
-
-        # Population-level IsolationForest
-        self._iso_forest: IsolationForest | None = None
-        self._iso_feature_names: list[str] = []
-
+        self._scaler: StandardScaler | None = None
+        self._iso: IsolationForest | None = None
+        self._feature_names: list[str] = []
         self._is_fitted = False
-        logger.info(
-            "AnomalyRouter initialised: ensemble mode, σ_threshold=%.2f, "
-            "forest_threshold=%.2f, σ_weight=%.2f, forest_weight=%.2f",
-            self._threshold_sigma,
-            self._threshold_forest, self._sigma_weight, self._forest_weight,
-        )
 
-    # ── Baseline Building ───────────────────────────────────────────────
+        # Population stats for explainability
+        self._population_means: dict[str, float] = {}
+        self._population_stds: dict[str, float] = {}
+
+        logger.info("OneClassRouter initialised (IsolationForest engine)")
+
+    # ── Feature Extraction ──────────────────────────────────────────────
+
+    @staticmethod
+    def _dossier_to_feature_vector(dossier: EntityDossier) -> dict[str, float]:
+        """Extract the feature dict for one-class fitting/prediction."""
+        return dossier.features or {}
+
+    # ── Fit (Training = Class 0 only) ───────────────────────────────────
 
     def build_baselines(self, train_dossiers: dict[str, EntityDossier]) -> None:
-        """Build per-entity μ/σ baselines AND train IsolationForest."""
-        n_built = 0
-        population_features: list[list[float]] = []
+        """Fit IsolationForest on class-0 training data."""
+        feature_dicts: list[dict[str, float]] = []
+        for dossier in train_dossiers.values():
+            fv = self._dossier_to_feature_vector(dossier)
+            if fv:
+                feature_dicts.append(fv)
 
-        for eid, dossier in train_dossiers.items():
-            temporal = dossier.temporal_data
-            if not temporal or len(temporal) < self._min_samples:
-                continue
-
-            sorted_rows = sorted(temporal, key=lambda r: str(r.get("Timestamp", "")))
-            entity_baseline: dict[str, tuple[float, float]] = {}
-
-            for col in _BASELINE_COLS:
-                values = [
-                    float(r[col]) for r in sorted_rows
-                    if col in r and r[col] is not None
-                ]
-                if len(values) >= self._min_samples:
-                    mu = float(np.mean(values))
-                    sigma = float(np.std(values))
-                    entity_baseline[col] = (mu, max(sigma, 1e-6))
-
-            if entity_baseline:
-                self._baselines[eid] = entity_baseline
-                n_built += 1
-
-            # Collect population feature vector
-            if dossier.features:
-                population_features.append(
-                    [dossier.features.get(f"{c}_mean", 0.0) for c in _BASELINE_COLS]
-                )
-
-        # Always train IsolationForest when hybrid mode is on
-        if len(population_features) >= 4:
-            X = np.array(population_features, dtype=float)
-            X = np.nan_to_num(X, nan=0.0)
-            self._iso_forest = IsolationForest(
-                n_estimators=100,
-                contamination="auto",
-                random_state=42,
+        if len(feature_dicts) < 4:
+            logger.warning(
+                "L0: only %d training samples — too few for IsolationForest fit",
+                len(feature_dicts),
             )
-            self._iso_forest.fit(X)
-            self._iso_feature_names = [f"{c}_mean" for c in _BASELINE_COLS]
-            logger.info("IsolationForest trained on %d population samples", len(X))
+            return
 
-        self._is_fitted = n_built > 0 or self._iso_forest is not None
-        logger.info(
-            "L0 baselines built for %d/%d entities (ensemble mode)",
-            n_built, len(train_dossiers),
-        )
+        # Build consistent feature matrix
+        all_keys = sorted(set().union(*(d.keys() for d in feature_dicts)))
+        self._feature_names = all_keys
 
-    # ── Z-Score Detector (Univariate) ───────────────────────────────────
-
-    def _zscore_detect(
-        self, entity_id: str, dossier: EntityDossier,
-    ) -> tuple[bool, float, dict[str, float]]:
-        """Univariate Z-Score per feature.
-
-        Returns (is_flagged, max_z_score, {feature: z_score}).
-        """
-        baseline = self._baselines.get(entity_id)
-
-        if baseline is None:
-            # Build live baseline from the entity's own data
-            temporal = dossier.temporal_data
-            if temporal and len(temporal) >= self._min_samples:
-                baseline = {}
-                sorted_rows = sorted(temporal, key=lambda r: str(r.get("Timestamp", "")))
-                for col in _BASELINE_COLS:
-                    values = [
-                        float(r[col]) for r in sorted_rows
-                        if col in r and r[col] is not None
-                    ]
-                    if len(values) >= self._min_samples:
-                        mu = float(np.mean(values[:-1]))
-                        sigma = float(np.std(values[:-1]))
-                        baseline[col] = (mu, max(sigma, 1e-6))
-
-        if not baseline:
-            return False, 0.0, {}
-
-        temporal = dossier.temporal_data
-        if not temporal:
-            return False, 0.0, {}
-
-        sorted_rows = sorted(temporal, key=lambda r: str(r.get("Timestamp", "")))
-        latest = sorted_rows[-1]
-
-        z_scores: dict[str, float] = {}
-        for col, (mu, sigma) in baseline.items():
-            raw = latest.get(col)
-            if raw is None:
-                continue
-            z = abs(float(raw) - mu) / sigma
-            z_scores[col] = round(z, 3)
-
-        if not z_scores:
-            return False, 0.0, {}
-
-        max_z = max(z_scores.values())
-        # Flag features exceeding threshold
-        deviating = {k: v for k, v in z_scores.items() if v > self._threshold_sigma}
-        is_flagged = len(deviating) > 0
-
-        return is_flagged, max_z, deviating
-
-    # ── IsolationForest Detector (Multivariate) ─────────────────────────
-
-    def _forest_detect(
-        self, dossier: EntityDossier,
-    ) -> tuple[bool, float]:
-        """Multivariate IsolationForest anomaly detection.
-
-        Returns (is_outlier, decision_score).
-        """
-        if self._iso_forest is None or not self._iso_feature_names:
-            return False, 0.0
-
-        x = np.array(
-            [[dossier.features.get(f, 0.0) for f in self._iso_feature_names]],
+        X = np.array(
+            [[d.get(k, 0.0) for k in all_keys] for d in feature_dicts],
             dtype=float,
         )
-        x = np.nan_to_num(x, nan=0.0)
+        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
-        score = float(self._iso_forest.decision_function(x)[0])
-        prediction = int(self._iso_forest.predict(x)[0])  # 1=normal, -1=outlier
+        # Store population statistics for explainability
+        for i, name in enumerate(all_keys):
+            col = X[:, i]
+            self._population_means[name] = float(np.mean(col))
+            self._population_stds[name] = float(np.std(col))
 
-        is_outlier = prediction == -1
-        return is_outlier, score
+        # Scale
+        self._scaler = StandardScaler()
+        X_scaled = self._scaler.fit_transform(X)
 
-    # ── Hybrid Ensemble ─────────────────────────────────────────────────
+        # Fit IsolationForest
+        self._iso = IsolationForest(
+            n_estimators=100,
+            contamination=0.05,
+            random_state=42,
+        )
+        self._iso.fit(X_scaled)
 
-    def _build_detection_metadata(
-        self,
-        entity_id: str,
-        dossier: EntityDossier,
+        self._is_fitted = True
+        logger.info(
+            "L0 IsolationForest fitted on %d class-0 samples (%d features)",
+            len(X), len(all_keys),
+        )
+
+    # ── Predict ─────────────────────────────────────────────────────────
+
+    def _predict(self, dossier: EntityDossier) -> tuple[bool, float, dict[str, float]]:
+        """Run IsolationForest on a single entity.
+
+        Returns (is_outlier, if_score, deviating_features).
+        """
+        fv = self._dossier_to_feature_vector(dossier)
+        x = np.array(
+            [[fv.get(k, 0.0) for k in self._feature_names]], dtype=float,
+        )
+        x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+        x_scaled = self._scaler.transform(x)
+
+        # IsolationForest: +1 = inlier, -1 = outlier
+        iso_pred = int(self._iso.predict(x_scaled)[0])
+        iso_score = float(self._iso.decision_function(x_scaled)[0])
+        is_outlier = iso_pred == -1
+
+        # Find which features deviate most from population
+        deviating: dict[str, float] = {}
+        for i, name in enumerate(self._feature_names):
+            pop_std = self._population_stds.get(name, 1e-6)
+            if pop_std < 1e-6:
+                continue
+            z = abs(fv.get(name, 0.0) - self._population_means.get(name, 0.0)) / pop_std
+            if z > 2.0:
+                deviating[name] = round(z, 2)
+
+        return is_outlier, iso_score, deviating
+
+    # ── Build DetectionMetadata ─────────────────────────────────────────
+
+    def _build_metadata(
+        self, entity_id: str, dossier: EntityDossier,
     ) -> DetectionMetadata:
-        """Run both detectors and produce a structured DetectionMetadata."""
-        # Z-Score (univariate)
-        z_flagged, max_z, deviating = self._zscore_detect(entity_id, dossier)
+        """Run IsolationForest and produce structured metadata."""
+        is_outlier, iso_score, deviating = self._predict(dossier)
 
-        # IsolationForest (multivariate)
-        f_flagged, f_score = self._forest_detect(dossier)
+        confidence = min(abs(iso_score) * 3, 1.0)
 
-        # Determine detection type
-        if z_flagged and f_flagged:
-            det_type = "both"
-        elif z_flagged:
-            det_type = "statistical"
-        elif f_flagged:
-            det_type = "behavioural"
-        else:
-            det_type = "none"
-
-        is_anomalous = z_flagged or f_flagged
-
-        # Ensemble confidence
-        z_conf = min(max_z / (2 * self._threshold_sigma), 1.0) if max_z > 0 else 0.0
-        f_conf = min(abs(f_score) * 3, 1.0) if f_flagged else 0.0
-
-        # Ensemble confidence (always weighted blend)
-        if z_flagged or f_flagged:
-            total_weight = self._sigma_weight + self._forest_weight
-            confidence = (
-                self._sigma_weight * z_conf + self._forest_weight * f_conf
-            ) / total_weight
-        else:
-            confidence = 1.0 - max(z_conf, f_conf)  # confidence in normality
-
-        confidence = min(1.0, max(0.0, confidence))
-
-        # Build report
+        # Build human-readable report for L1
         report_parts: list[str] = []
-        if z_flagged and deviating:
-            sensors = ", ".join(f"{k} (z={v:.2f}σ)" for k, v in deviating.items())
-            report_parts.append(f"Anomalia statistica rilevata nei sensori: {sensors}")
-        if f_flagged:
-            report_parts.append(
-                f"Rilevata deviazione comportamentale multi-fattore "
-                f"(isolation_score={f_score:.4f})"
-            )
-        if not report_parts:
-            report_parts.append("Nessuna anomalia rilevata — profilo nella norma.")
+        if is_outlier:
+            if deviating:
+                top_devs = sorted(deviating.items(), key=lambda x: -x[1])[:5]
+                sensors = ", ".join(f"{k} (z={v:.1f}σ)" for k, v in top_devs)
+                report_parts.append(f"Anomalia rilevata su: {sensors}")
+            report_parts.append(f"IF_score={iso_score:.4f}")
+        else:
+            report_parts.append("Nessuna anomalia — profilo nella norma.")
 
         return DetectionMetadata(
-            is_anomalous=is_anomalous,
-            confidence=confidence,
-            zscore_flagged=z_flagged,
-            forest_flagged=f_flagged,
-            detection_type=det_type,
+            is_anomalous=is_outlier,
+            confidence=confidence if is_outlier else 1.0 - confidence,
+            forest_flagged=is_outlier,
+            detection_type="behavioural" if is_outlier else "none",
             deviating_features=deviating,
-            forest_score=f_score,
+            forest_score=iso_score,
             report=" | ".join(report_parts),
         )
 
     # ── Public API ──────────────────────────────────────────────────────
 
     def to_verdict(
-        self,
-        entity_id: str,
-        dossier: EntityDossier,
+        self, entity_id: str, dossier: EntityDossier,
     ) -> tuple[AgentVerdict | None, float, DetectionMetadata]:
-        """Return (AgentVerdict | None, complexity_score, DetectionMetadata).
+        """Return (AgentVerdict | None, complexity, DetectionMetadata).
 
-        The Switch:
-        - Both silent  → verdict=0 at zero LLM cost.
-        - Any flagged  → None (escalate) with DetectionMetadata for L1.
+        - Inlier  → verdict=0 at zero LLM cost.
+        - Outlier → None (escalate to L1) with math details.
         """
         if not self._is_fitted:
             return None, 1.0, DetectionMetadata()
 
-        meta = self._build_detection_metadata(entity_id, dossier)
+        meta = self._build_metadata(entity_id, dossier)
 
         if not meta.is_anomalous:
-            # Both detectors silent → return 0 instantly (100% token saving)
             return AgentVerdict(
-                agent_name="L0_HybridRouter",
+                agent_name="L0_OneClassRouter",
                 prediction=0,
                 confidence=meta.confidence,
                 reasoning=meta.report,
             ), 0.0, meta
 
-        # Anomaly detected → escalate to L1 with explainability metadata
         complexity = min(1.0, meta.confidence)
         logger.info(
-            "  L0[%s] ESCALATING %s: type=%s, confidence=%.2f, report=%s",
-            entity_id, meta.detection_type, meta.detection_type,
-            meta.confidence, meta.report[:120],
+            "  L0[%s] OUTLIER → escalating to L1: conf=%.2f, %s",
+            entity_id, meta.confidence, meta.report[:150],
         )
         return None, complexity, meta
 

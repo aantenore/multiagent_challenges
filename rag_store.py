@@ -57,6 +57,21 @@ class RAGStore:
                 logger.warning("Failed to init ChromaDB: %s — disabling RAG", exc)
                 self._enabled = False
 
+    def reset(self) -> None:
+        """Clear the collection for a new level (per-level isolation)."""
+        if not self._enabled or self._collection is None:
+            return
+        try:
+            client = self._collection._client
+            client.delete_collection(self._collection_name)
+            self._collection = client.get_or_create_collection(
+                name=self._collection_name,
+                metadata={"hnsw:space": "cosine"},
+            )
+            logger.info("RAG: collection reset for new level")
+        except Exception as exc:
+            logger.warning("RAG reset failed: %s", exc)
+
     # ── Write ───────────────────────────────────────────────────────────
 
     def add_case(

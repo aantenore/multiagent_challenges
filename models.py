@@ -13,10 +13,10 @@ from pydantic import BaseModel, Field
 # ── Detection Metadata (Layer 0 → Layer 1 explainability) ──────────────
 
 class DetectionMetadata(BaseModel):
-    """Structured explanation from the L0 Hybrid Anomaly Router.
+    """Structured explanation from the L0 One-Class Anomaly Engine.
 
-    Passed to L1 agents so they know WHY L0 escalated this entity,
-    letting them focus on the flagged signals instead of re-analysing noise.
+    Passed to L1 agents so they know WHY L0 escalated this entity
+    (mathematical anomaly details). L1 acts as Anti-False-Positive filter.
     """
 
     is_anomalous: bool = Field(
@@ -25,15 +25,12 @@ class DetectionMetadata(BaseModel):
     confidence: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Overall anomaly confidence"
     )
-    zscore_flagged: bool = Field(
-        default=False, description="Z-Score univariate analysis flagged anomaly"
-    )
     forest_flagged: bool = Field(
-        default=False, description="IsolationForest multivariate analysis flagged anomaly"
+        default=False, description="IsolationForest flagged this entity as outlier"
     )
     detection_type: str = Field(
         default="none",
-        description="'statistical', 'behavioural', 'both', or 'none'"
+        description="'behavioural' or 'none'"
     )
     deviating_features: dict[str, float] = Field(
         default_factory=dict,

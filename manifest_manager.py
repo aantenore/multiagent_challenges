@@ -1,6 +1,6 @@
 """
 ManifestManager — loads and validates the manifest.json file.
-Supports N-stage train/eval pipelines with cumulative training.
+Supports N-stage train/eval pipelines with per-level training.
 """
 
 from __future__ import annotations

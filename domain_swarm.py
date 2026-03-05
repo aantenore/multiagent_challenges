@@ -48,6 +48,7 @@ class DomainAgent(BaseAgent):
         self,
         dossier: EntityDossier,
         rag_examples: list[dict],
+        l0_report: str = "",
     ) -> str:
         # Select the data slice relevant to this agent's role
         data_slice = self._select_slice(dossier)
@@ -64,6 +65,14 @@ class DomainAgent(BaseAgent):
                 col_lines = "\n".join(f"- **{k}**: {v}" for k, v in cols.items())
                 sem_section += f"### Column Definitions\n{col_lines}\n\n"
 
+        # L0 anomaly report section
+        l0_section = ""
+        if l0_report:
+            l0_section = (
+                f"### L0 Anomaly Report (Mathematical Detection)\n"
+                f"{l0_report}\n\n"
+            )
+
         # Load external template; use inline fallback if missing
         template = load_prompt("domain_agent")
         if template:
@@ -76,14 +85,22 @@ class DomainAgent(BaseAgent):
                 profile_json=json.dumps(dossier.profile_data, default=str, indent=2),
                 context=dossier.context_data[:2000] if dossier.context_data else "N/A",
                 rag_section=rag_section,
+                l0_section=l0_section,
             )
 
-        # Inline fallback
+        # Inline fallback — Anti-False-Positive Filter
         return (
-            f"## Task\n"
-            f"Analyse the following **{self.role}** data for entity "
-            f"'{dossier.entity_id}' and decide whether the trajectory "
-            f"suggests *preventive support* (1) or *standard monitoring* (0).\n\n"
+            f"## Task — Anti-False-Positive Filter\n"
+            f"The Layer 0 One-Class engine (SVM + IsolationForest) has "
+            f"detected a **mathematical anomaly** for entity '{dossier.entity_id}'.\n\n"
+            f"Your job is NOT to discover anomalies in numbers (L0 already did that). "
+            f"Your job is to act as a **contextual false-positive filter**:\n"
+            f"- Read the context (persona, profile, lifestyle) and the {self.role} data.\n"
+            f"- Decide if the mathematical deviation is **justified** by the person's "
+            f"life context (e.g. seasonal change, known condition, lifestyle choice).\n"
+            f"- If justified → output 0 (standard monitoring, false positive from L0).\n"
+            f"- If NOT justified → output 1 (confirm preventive support).\n\n"
+            f"{l0_section}"
             f"{sem_section}"
             f"### {self.role.title()} Data\n"
             f"```json\n{data_slice}\n```\n\n"
@@ -92,8 +109,9 @@ class DomainAgent(BaseAgent):
             f"### Context\n{dossier.context_data[:2000] if dossier.context_data else 'N/A'}\n\n"
             f"{rag_section}"
             f"### Instructions\n"
-            f"- Look for deteriorating trends, anomalies, or warning signals.\n"
-            f"- False Negatives are MUCH WORSE than False Positives.\n\n"
+            f"- The L0 engine flagged this entity as outlier. Check if it is truly abnormal.\n"
+            f"- False Negatives are WORSE than False Positives.\n"
+            f"- But don't blindly confirm: if life context explains the deviation, output 0.\n\n"
             f"Respond with JSON: "
             f'{{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}'
         )
@@ -218,6 +236,7 @@ class RoleCoordinator:
         dossier: EntityDossier,
         rag_examples: list[dict] | None = None,
         l0_complexity: float = 1.0,
+        l0_report: str = "",
     ) -> SwarmConsensus:
         """Spawn N agents, collect verdicts, aggregate into consensus."""
         rag_examples = rag_examples or []
@@ -238,7 +257,7 @@ class RoleCoordinator:
         verdicts: list[AgentVerdict] = []
 
         def _run_agent(agent: DomainAgent) -> AgentVerdict:
-            return agent.analyze(dossier, rag_examples)
+            return agent.analyze(dossier, rag_examples, l0_report=l0_report)
 
         with ThreadPoolExecutor(max_workers=n_agents) as pool:
             futures = {pool.submit(_run_agent, agent): agent for agent in agents}
@@ -393,8 +412,12 @@ class SwarmFactory:
         detection_metadata: Any = None,
     ) -> list[SwarmConsensus]:
         """Run all coordinators IN PARALLEL and collect consensus verdicts."""
+        l0_report = ""
+        if detection_metadata is not None:
+            l0_report = getattr(detection_metadata, 'report', '')
+
         def _run_coord(coord: RoleCoordinator) -> SwarmConsensus:
-            return coord.run(dossier, rag_examples, l0_complexity)
+            return coord.run(dossier, rag_examples, l0_complexity, l0_report=l0_report)
 
         results: list[SwarmConsensus] = []
         with ThreadPoolExecutor(max_workers=len(coordinators)) as pool:
