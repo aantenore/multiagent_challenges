@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     # ── Pipeline Hyperparameters ────────────────────────────────────────
     l0_lower_threshold: float = 0.15
     l0_upper_threshold: float = 0.85
+    l0_contamination: float = 0.05 # 5% baseline anomaly rate
     fp_cost: float = 1.0
     fn_cost: float = 5.0
 

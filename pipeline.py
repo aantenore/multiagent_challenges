@@ -129,11 +129,14 @@ class AdaptivePipeline:
             self._router.build_baselines(train_dossiers)
             console.print(f"  [green]✓ L0 baselines built on {len(train_dossiers)} entities[/]")
 
-            # Store training entities in RAG with pred=0 (well-being)
+            # Store training entities in RAG (as wellness baseline)
             if self._rag.is_enabled:
                 for eid, dossier in train_dossiers.items():
                     summary = self._rag.summarise_dossier(dossier)
-                    self._rag.add_case(eid, summary, 0)  # pred=0
+                    # Use the actual dossier label if it exists in features/metadata, 
+                    # otherwise default to 0 (Wellness)
+                    label = getattr(dossier, "label", 0) 
+                    self._rag.add_case(eid, summary, label=label)
 
         # ── 2. Evaluation Prep ──────────────────────────────────────
         eval_sources = stage.evaluation_sources
@@ -185,7 +188,7 @@ class AdaptivePipeline:
                     if result.final_prediction != ground_truth and self._rag.is_enabled:
                         summary = self._rag.summarise_dossier(dossier)
                         reinforced_summary = f"[TRICKY_CASE_MISCLASSIFIED_AS_{result.final_prediction}] {summary}"
-                        self._rag.add_case(dossier.entity_id, reinforced_summary, ground_truth)
+                        self._rag.add_case(dossier.entity_id, reinforced_summary, label=ground_truth)
                         
                     progress.advance(train_task)
             

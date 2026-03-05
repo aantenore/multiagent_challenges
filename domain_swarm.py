@@ -129,7 +129,7 @@ class DomainAgent(BaseAgent):
         lines = ["### Historical Similar Cases (few-shot)\n"]
         for i, ex in enumerate(examples, 1):
             lines.append(
-                f"**Case {i}** (predicted={ex.get('predicted_label')}): "
+                f"**Case {i}** (label={ex.get('label')}): "
                 f"{ex.get('summary', 'N/A')}\n"
             )
         lines.append("")

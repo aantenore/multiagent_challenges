@@ -78,7 +78,7 @@ class RAGStore:
         self,
         entity_id: str,
         dossier_summary: str,
-        predicted_label: int,
+        label: int,
     ) -> None:
         """Store an evaluated case for future few-shot retrieval.
 
@@ -88,7 +88,7 @@ class RAGStore:
             return
 
         doc_id = hashlib.sha256(
-            f"{entity_id}:{predicted_label}".encode()
+            f"{entity_id}:{label}".encode()
         ).hexdigest()[:16]
 
         self._collection.upsert(
@@ -97,15 +97,15 @@ class RAGStore:
             metadatas=[
                 {
                     "entity_id": entity_id,
-                    "predicted_label": predicted_label,
+                    "label": label,
                     "summary": dossier_summary[:500],
                 }
             ],
         )
         logger.info(
-            "RAG: stored case for %s (pred=%d) — collection count: %d",
+            "RAG: stored case for %s (label=%d) — collection count: %d",
             entity_id,
-            predicted_label,
+            label,
             self._collection.count(),
         )
         logger.debug(

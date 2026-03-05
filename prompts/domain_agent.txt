@@ -15,13 +15,15 @@ Analyse the following **{role}** data for entity '{entity_id}' and decide whethe
 ### Context
 {context}
 
+### Ground Truth Reference (RAG)
 {rag_section}
+
 ### Instructions
 - Look for deteriorating trends, anomalies, or warning signals.
 - Consider: declining physical activity, worsening sleep, increasing environmental exposure, emergency visits, specialist consultations.
 - A sharp DROP in PhysicalActivityIndex or SleepQualityIndex across events is a red flag.
 - EventTypes like 'emergency visit', 'specialist consultation', 'follow-up assessment' signal escalation.
 - Reduced mobility radius or sudden isolation patterns indicate withdrawal.
-- False Negatives (missing a person who needs help) are MUCH WORSE than False Positives.
+- **RAG Authority**: Historical cases with label=0 are confirmed stable profiles. Use them to filter out similar trajectories that might look like anomalies but are actually typical for this cohort.
 
 Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}
