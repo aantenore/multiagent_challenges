@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     # ── LLM Provider ────────────────────────────────────────────────────
-    llm_provider: str = "openai"  # "openai" | "gemini"
+    llm_provider: str = "gemini"  # "openai" | "gemini"
 
     # ── LLM Provider Keys ───────────────────────────────────────────────
     openai_api_key: str = ""
@@ -30,10 +30,10 @@ class Settings(BaseSettings):
     google_api_key: str = ""
 
     # ── Model Configuration ─────────────────────────────────────────────
-    cheap_model_name: str = "gpt-4o-mini"
-    smart_model_name: str = "gpt-4o"
-    gemini_cheap_model_name: str = "gemini-2.0-flash"
-    gemini_smart_model_name: str = "gemini-2.5-pro-exp-03-25"
+    cheap_model_name: str = "gpt-5-nano"
+    smart_model_name: str = "gpt-5.2"
+    gemini_cheap_model_name: str = "gemini-3-flash-preview"
+    gemini_smart_model_name: str = "gemini-3.1-pro-preview"
     model_temperature: float = 0.1
     max_agent_retries: int = 3
 
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
-    team_name: str = "mirror"
+    team_name: str = "A(CC)I-Tua"
 
     # ── Pipeline Hyperparameters ────────────────────────────────────────
     l0_lower_threshold: float = 0.15
@@ -55,8 +55,8 @@ class Settings(BaseSettings):
     # ── Swarm Configuration ──────────────────────────────────────────────
     swarm_min_agents: int = 1
     swarm_max_agents: int = 5
-    swarm_complexity_threshold: float = 0.3
-    swarm_temp_spread: float = 0.05
+    swarm_complexity_threshold: float = 0.2
+    swarm_temp_spread: float = 0.5
 
     # ── RAG Configuration ───────────────────────────────────────────────
     rag_collection_name: str = "case_memory"
