@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     swarm_temp_spread: float = 0.15
 
     # ── RAG Configuration ───────────────────────────────────────────────
-    rag_collection_name: str = "mirror_errors"
+    rag_collection_name: str = "case_memory"
     top_k_rag: int = 3
     rag_db_path: str = "./chroma_db"
 

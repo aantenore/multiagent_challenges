@@ -22,7 +22,12 @@ try:
 except ImportError:
     _ulid = None
 
-from langfuse_utils import langfuse_client, get_current_session_id
+from langfuse_utils import (
+    langfuse_client, 
+    generate_session_id, 
+    set_current_session_id,
+    get_current_session_id
+)
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -101,14 +106,6 @@ class AdaptivePipeline:
         results_dir: Path | None = None,
     ) -> list[PipelineResult]:
         """Process one stage: train on THIS level's data only, then evaluate."""
-        stage_session_id = get_current_session_id()
-        # langfuse_client.update_current_trace removed as @observe is now only in run_llm_call
-        
-        # ── Write session ID to separate result file ────────────────
-        if results_dir:
-            session_file = results_dir / f"langfuse_session_{stage.name}.json"
-            with open(session_file, "w", encoding="utf-8") as f:
-                json.dump({"stage": stage.name, "session_id": stage_session_id}, f, indent=2)
         # ── 0. Reset RAG for this level (each level is self-contained) ──
         if self._rag.is_enabled:
             self._rag.reset()
@@ -138,59 +135,84 @@ class AdaptivePipeline:
                     summary = self._rag.summarise_dossier(dossier)
                     self._rag.add_case(eid, summary, 0)  # pred=0
 
-        # ── 2. Evaluation ──────────────────────────────────────────
+        # ── 2. Evaluation Prep ──────────────────────────────────────
         eval_sources = stage.evaluation_sources
         if not eval_sources:
             console.print("  [yellow]⚠ No evaluation sources — skipping[/]")
             return []
 
         console.print(
-            f"  Evaluating: [bold]{len(eval_sources)}[/] sources"
+            f"  Evaluation prep: [bold]{len(eval_sources)}[/] sources"
         )
         eval_builder = DossierBuilder.from_entries(eval_sources, manager.base_dir)
         eval_dossiers = eval_builder.build_all()
 
-        # Engineer features
         for dossier in eval_dossiers.values():
             dossier.features = self._extractor.extract(dossier)
 
-        # Create coordinators with semantic metadata from this level's sources
         all_entries = train_sources + eval_sources if train_sources else eval_sources
         coordinators = SwarmFactory.create_coordinators(
             roles={e.role for e in all_entries},
             manifest_entries=all_entries,
         )
 
-        # ── 3. Predict each entity ─────────────────────────────────
-        results: list[PipelineResult] = []
+        # ── 3. Predict training set (diagnostic) ────────────────────
+        train_results: list[PipelineResult] = []
+        if train_dossiers:
+            # Rotate session for training phase
+            train_session_id = generate_session_id()
+            set_current_session_id(train_session_id)
+            if results_dir:
+                session_file = results_dir / f"langfuse_session_{stage.name}_train.json"
+                with open(session_file, "w", encoding="utf-8") as f:
+                    json.dump({"stage": stage.name, "phase": "train", "session_id": train_session_id}, f, indent=2)
 
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                train_task = progress.add_task(
+                    f"  {stage.name}: predicting training set…", total=len(train_dossiers)
+                )
+                for dossier in train_dossiers.values():
+                    result = self._process_entity(dossier, coordinators)
+                    train_results.append(result)
+                    progress.advance(train_task)
+            
+            train_out_file = f"train_predictions_{stage.name}.txt"
+            train_out_path = results_dir / train_out_file if results_dir else Path(train_out_file)
+            write_predictions(train_results, train_out_path)
+            console.print(f"  [blue]ℹ Training predictions written to {train_out_file}[/]")
+
+        # ── 4. Predict evaluation set ──────────────────────────────
+        eval_session_id = generate_session_id()
+        set_current_session_id(eval_session_id)
+        if results_dir:
+            session_file = results_dir / f"langfuse_session_{stage.name}_eval.json"
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump({"stage": stage.name, "phase": "eval", "session_id": eval_session_id}, f, indent=2)
+
+        eval_results: list[PipelineResult] = []
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task_id = progress.add_task(
-                f"  {stage.name}: predicting…", total=len(eval_dossiers)
+            eval_task = progress.add_task(
+                f"  {stage.name}: predicting eval set…", total=len(eval_dossiers)
             )
             for dossier in eval_dossiers.values():
                 result = self._process_entity(dossier, coordinators)
-                results.append(result)
-                progress.advance(task_id)
+                eval_results.append(result)
+                progress.advance(eval_task)
 
-        # ── 4. Write output ────────────────────────────────────────
+        # ── 5. Write eval output ───────────────────────────────────
         out_file = stage.output_file or f"predictions_{stage.name}.txt"
         out_path = results_dir / out_file if results_dir else Path(out_file)
-        write_predictions(results, out_path)
+        write_predictions(eval_results, out_path)
 
-        # ── 5. Store all cases in RAG (self-supervised) ────────────────
-        if self._rag.is_enabled:
-            for r in results:
-                summary = self._rag.summarise_dossier(eval_dossiers[r.entity_id])
-                self._rag.add_case(
-                    r.entity_id, summary, r.final_prediction,
-                )
-
-        return results
+        return eval_results
 
     # ── Entity processing ───────────────────────────────────────────────
 
