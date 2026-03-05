@@ -183,9 +183,10 @@ class AdaptivePipeline:
                 console=console,
             ) as progress:
                 train_task = progress.add_task(
-                    f"  {stage.name}: predicting training set…", total=len(train_dossiers)
+                    f"  {stage.name}: self-diagnostic (autoclassifying training set)…", total=len(train_dossiers)
                 )
                 for dossier in train_dossiers.values():
+                    logger.info("  [Self-Diagnostic] System classifying %s to reinforce RAG", dossier.entity_id)
                     result = self._process_entity(dossier, coordinators)
                     train_results.append(result)
                     
