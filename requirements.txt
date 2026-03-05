@@ -9,3 +9,4 @@ langfuse>=2.0,<3.0
 chromadb>=0.4,<1.0
 python-dotenv>=1.0,<2.0
 rich>=13.0,<14.0
+statsmodels>=0.14.0

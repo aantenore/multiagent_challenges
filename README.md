@@ -28,9 +28,20 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
           └────────────┬────────────┘
                        ▼
          ┌──────────────────────────┐
-         │  Feature Engineering    │  sliding windows, MA3/MA7, slope
+         │  Feature Engineering    │  sliding windows, dynamic lag (ACF)
          └────────────┬────────────┘
                       ▼
+
+### Dynamic Time-Aware Feature Extraction
+
+The pipeline uses `pandas` to extract true time-aware rolling features, solving issues with irregular sampling intervals. 
+Instead of relying on fixed record counts, it calculates features over continuous `3D` and `7D` rolling windows.
+
+**Killer Feature — ACF Dynamic Sizing:**
+To maximize Agentic Efficiency (a 40% weighted challenge metric), the engine adapts to the physiological rhythms of each individual citizen.
+Using `statsmodels`, it computes the **Autocorrelation (ACF)** on the citizen's historical series (e.g., PhysicalActivityIndex). By identifying the dominant lag (peak autocorrelation), the system discovers the user's natural cycle length automatically. 
+It then extracts dynamic features (e.g., `_dynamic_mean`, `_dynamic_deviation`) perfectly tailored to their unique circadian or weekly rhythms.
+If the series is too short or irregular to find an ACF peak, it seamlessly falls back to the configured baseline window size.
          ┌──────────────────────────┐
          │  Layer 0 — IsolationForest│  One-Class engine
          │  + DetectionMetadata      │  Fit on class-0 only
@@ -324,6 +335,7 @@ At the end of each stage (if ground truth is provided), the pipeline prints:
 - **Dependencies** (see `requirements.txt`):
   - `pydantic` + `pydantic-settings` — configuration & data validation
   - `pandas` + `numpy` — data manipulation
+  - `statsmodels` — autocorrelation (ACF) for dynamic time-aware features
   - `scikit-learn` — anomaly detection (IsolationForest, Layer 0)
   - `openai` — OpenAI LLM API client
   - `google-genai` — Google Gemini LLM API client
