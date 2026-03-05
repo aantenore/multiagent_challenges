@@ -93,11 +93,12 @@ class SlidingWindowExtractor:
         else:
             return feats
 
+        # Auto-detect numeric columns (excluding IDs)
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        cols_to_process = [c for c in numeric_cols if c not in {"CitizenID", "EventID", "user_id"}]
+
         # Per-numeric-column sliding window
-        for col in self._NUMERIC_COLS:
-            if col not in df.columns:
-                continue
-                
+        for col in cols_to_process:
             series = df[col].dropna().astype(float)
             if series.empty:
                 continue
@@ -227,17 +228,20 @@ class SlidingWindowExtractor:
     # ── Profile ─────────────────────────────────────────────────────────
 
     def _profile_features(self, profile: dict[str, Any]) -> dict[str, float]:
+        """Extract all numeric features from profile, including nested ones like residence."""
         feats: dict[str, float] = {}
-        if "birth_year" in profile:
-            try:
-                feats["birth_year"] = float(profile["birth_year"])
-            except (ValueError, TypeError):
-                pass
-        if "_travel_per_year" in profile:
-            try:
-                feats["travel_per_year"] = float(profile["_travel_per_year"])
-            except (ValueError, TypeError):
-                pass
+        
+        for k, v in profile.items():
+            # Handle flattened numeric values
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                feats[k.lstrip("_")] = float(v)
+            
+            # Handle nested residence object
+            elif k == "residence" and isinstance(v, dict):
+                for rk, rv in v.items():
+                    if isinstance(rv, (int, float)) and not isinstance(rv, bool):
+                        feats[f"residence_{rk}"] = float(rv)
+        
         return feats
 
     # ── Utils ───────────────────────────────────────────────────────────
