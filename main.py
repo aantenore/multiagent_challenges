@@ -12,6 +12,9 @@ import argparse
 import logging
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from rich.console import Console
 from rich.logging import RichHandler
 
@@ -93,11 +96,8 @@ def main() -> None:
             )
         c.print("\n[bold green]All stages complete.[/]")
         
-        try:
-            from pipeline import langfuse_context
-            langfuse_context.flush()
-        except ImportError:
-            pass
+        # No flush needed per user request
+        pass
 
     except Exception as exc:
         Console().print(f"[bold red]Pipeline failed:[/] {exc}")

@@ -1,9 +1,10 @@
 """
 Modular LLM Provider — switchable backend for OpenAI and Google Gemini.
+Uses LangChain wrappers to enable native Langfuse CallbackHandler integration.
 
 Usage:
     provider = get_provider()           # uses settings.llm_provider
-    response = provider.chat(system_msg, user_msg, model, temperature)
+    response = provider.chat(system_msg, user_msg, model, temperature, callbacks=[handler])
 
 To add a new provider:
     1. Subclass ``BaseLLMProvider``
@@ -24,6 +25,29 @@ from settings import get_settings
 logger = logging.getLogger(__name__)
 
 
+def _extract_text(content: Any) -> str:
+    """Normalize LangChain AIMessage.content to a plain string.
+
+    LangChain's Gemini wrapper can return content as:
+    - str: plain text (normal case)
+    - list[str]: multiple text chunks
+    - list[dict]: content blocks like [{'type':'text','text':'...'}]
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and "text" in item:
+                parts.append(item["text"])
+            else:
+                parts.append(str(item))
+        return "\n".join(parts)
+    return str(content)
+
+
 # ── Abstract Provider ───────────────────────────────────────────────────
 
 class BaseLLMProvider(ABC):
@@ -38,6 +62,7 @@ class BaseLLMProvider(ABC):
         model: str,
         temperature: float = 0.2,
         json_mode: bool = True,
+        callbacks: list[Any] | None = None,
     ) -> str:
         """Send a chat request and return the raw text response."""
         ...
@@ -48,16 +73,14 @@ class BaseLLMProvider(ABC):
         ...
 
 
-# ── OpenAI Provider ─────────────────────────────────────────────────────
+# ── OpenAI Provider (via LangChain) ─────────────────────────────────────
 
 class OpenAIProvider(BaseLLMProvider):
-    """OpenAI ChatCompletion backend."""
+    """OpenAI ChatCompletion backend via LangChain ChatOpenAI."""
 
     def __init__(self) -> None:
-        from openai import OpenAI
-
         cfg = get_settings()
-        self._client = OpenAI(api_key=cfg.openai_api_key)
+        self._api_key = cfg.openai_api_key
         self._models = {
             "cheap": cfg.cheap_model_name,
             "smart": cfg.smart_model_name,
@@ -71,40 +94,39 @@ class OpenAIProvider(BaseLLMProvider):
         model: str,
         temperature: float = 0.2,
         json_mode: bool = True,
+        callbacks: list[Any] | None = None,
     ) -> str:
+        from langchain_openai import ChatOpenAI
+        from langchain_core.messages import SystemMessage, HumanMessage
+
         kwargs: dict[str, Any] = {
+            "api_key": self._api_key,
             "model": model,
             "temperature": temperature,
-            "messages": [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message},
-            ],
         }
         if json_mode:
-            kwargs["response_format"] = {"type": "json_object"}
+            kwargs["model_kwargs"] = {"response_format": {"type": "json_object"}}
 
-        resp = self._client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content or "{}"
+        llm = ChatOpenAI(**kwargs)
+        
+        from langfuse_utils import run_llm_call, get_current_session_id
+        session_id = get_current_session_id()
+        response_content = run_llm_call(session_id, llm, system_message, user_message)
+
+        return _extract_text(response_content) or "{}"
 
     def resolve_model(self, role: str) -> str:
         return self._models.get(role, self._models["cheap"])
 
 
-# ── Google Gemini Provider ──────────────────────────────────────────────
+# ── Google Gemini Provider (via LangChain) ──────────────────────────────
 
 class GeminiProvider(BaseLLMProvider):
-    """Google Generative AI (Gemini) backend."""
+    """Google Generative AI (Gemini) backend via LangChain ChatGoogleGenerativeAI."""
 
     def __init__(self) -> None:
-        try:
-            from google import genai
-        except ImportError as exc:
-            raise ImportError(
-                "Install google-genai: pip install google-genai"
-            ) from exc
-
         cfg = get_settings()
-        self._client = genai.Client(api_key=cfg.google_api_key)
+        self._api_key = cfg.google_api_key
         self._models = {
             "cheap": cfg.gemini_cheap_model_name,
             "smart": cfg.gemini_smart_model_name,
@@ -118,22 +140,22 @@ class GeminiProvider(BaseLLMProvider):
         model: str,
         temperature: float = 0.2,
         json_mode: bool = True,
+        callbacks: list[Any] | None = None,
     ) -> str:
-        from google.genai import types
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.messages import SystemMessage, HumanMessage
 
-        config_kwargs: dict[str, Any] = {
-            "temperature": temperature,
-            "system_instruction": system_message,
-        }
-        if json_mode:
-            config_kwargs["response_mime_type"] = "application/json"
-
-        response = self._client.models.generate_content(
+        llm = ChatGoogleGenerativeAI(
+            google_api_key=self._api_key,
             model=model,
-            contents=user_message,
-            config=types.GenerateContentConfig(**config_kwargs),
+            temperature=temperature,
         )
-        return response.text or "{}"
+        
+        from langfuse_utils import run_llm_call, get_current_session_id
+        session_id = get_current_session_id()
+        response_content = run_llm_call(session_id, llm, system_message, user_message)
+
+        return _extract_text(response_content) or "{}"
 
     def resolve_model(self, role: str) -> str:
         return self._models.get(role, self._models["cheap"])
@@ -162,5 +184,5 @@ def get_provider() -> BaseLLMProvider:
             f"Unknown LLM provider '{provider_name}'. "
             f"Available: {list(_REGISTRY.keys())}"
         )
-    logger.info("LLM provider: %s", provider_name)
+    logger.info("LLM provider: %s (via LangChain)", provider_name)
     return _REGISTRY[provider_name]()

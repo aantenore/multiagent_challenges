@@ -14,26 +14,16 @@ from __future__ import annotations
 
 import json
 import logging
-import uuid
+import os
 from pathlib import Path
 
 try:
-    from langfuse.decorators import langfuse_context, observe
+    import ulid as _ulid
 except ImportError:
-    # Fallback if langfuse is not installed
-    class DummyLangfuseContext:
-        def update_current_trace(self, *args, **kwargs):
-            pass
-        def __getattr__(self, name):
-            # Allow accessing any attribute without error
-            return lambda *args, **kwargs: None
+    _ulid = None
 
-    langfuse_context = DummyLangfuseContext()
+from langfuse_utils import langfuse_client, get_current_session_id
 
-    def observe(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -61,7 +51,7 @@ class AdaptivePipeline:
         self._rag = RAGStore()
         self._extractor = SlidingWindowExtractor()
         self._orchestrator = GlobalOrchestrator()
-        self._session_id = str(uuid.uuid4())
+        self._session_id = get_current_session_id()
 
     # ── Main entry point ────────────────────────────────────────────────
 
@@ -103,7 +93,6 @@ class AdaptivePipeline:
 
     # ── Stage processing ────────────────────────────────────────────────
 
-    @observe(name="stage_run")
     def _run_stage(
         self,
         manager: ManifestManager,
@@ -112,11 +101,8 @@ class AdaptivePipeline:
         results_dir: Path | None = None,
     ) -> list[PipelineResult]:
         """Process one stage: train on THIS level's data only, then evaluate."""
-        stage_session_id = str(uuid.uuid4())
-        langfuse_context.update_current_trace(
-            session_id=stage_session_id,
-            name=f"mirror_stage_{stage.name}",
-        )
+        stage_session_id = get_current_session_id()
+        # langfuse_client.update_current_trace removed as @observe is now only in run_llm_call
         
         # ── Write session ID to separate result file ────────────────
         if results_dir:

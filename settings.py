@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
+    team_name: str = "mirror"
 
     # ── Pipeline Hyperparameters ────────────────────────────────────────
     l0_lower_threshold: float = 0.15

@@ -17,15 +17,6 @@ import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-try:
-    from langfuse.decorators import observe
-except ImportError:
-    # Fallback if langfuse is not installed
-    def observe(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
-
 from agent_base import BaseAgent
 from models import AgentVerdict, EntityDossier, ManifestEntry, SwarmConsensus
 from prompt_loader import load_prompt
@@ -230,7 +221,6 @@ class RoleCoordinator:
         n = min_n + ratio * (max_n - min_n)
         return max(min_n, min(max_n, round(n)))
 
-    @observe(name="L1_role_coordinator_run")
     def run(
         self,
         dossier: EntityDossier,
@@ -403,7 +393,6 @@ class SwarmFactory:
         return coordinators
 
     @staticmethod
-    @observe(name="L1_swarm_vote")
     def run_coordinators(
         coordinators: list[RoleCoordinator],
         dossier: EntityDossier,
@@ -434,52 +423,3 @@ class SwarmFactory:
         return results
 
     # ── Legacy compatibility ────────────────────────────────────────────
-
-    @staticmethod
-    def create_swarm(
-        roles: set[str],
-        manifest_entries: list[ManifestEntry] | None = None,
-    ) -> list[DomainAgent]:
-        """Legacy: creates one DomainAgent per role (no coordinator)."""
-        cfg = get_settings()
-        from llm_provider import get_provider
-        provider = get_provider()
-        model_name = provider.resolve_model("cheap")
-
-        role_meta: dict[str, dict[str, Any]] = {}
-        if manifest_entries:
-            for entry in manifest_entries:
-                role_meta.setdefault(entry.role, {
-                    "description": entry.description,
-                    "columns": entry.columns,
-                })
-
-        agents = [
-            DomainAgent(
-                role=role,
-                semantic_metadata=role_meta.get(role),
-                model_name=model_name,
-                temperature=cfg.model_temperature,
-            )
-            for role in sorted(roles)
-        ]
-        logger.info("Swarm created: %s", [a.name for a in agents])
-        return agents
-
-    @staticmethod
-    @observe(name="L1_swarm_vote_legacy")
-    def run_swarm(
-        agents: list[DomainAgent],
-        dossier: EntityDossier,
-        rag_examples: list[dict] | None = None,
-    ) -> list[AgentVerdict]:
-        """Legacy: run all swarm agents on a single entity."""
-        verdicts: list[AgentVerdict] = []
-        for agent in agents:
-            verdict = agent.analyze(dossier, rag_examples)
-            verdicts.append(verdict)
-            logger.info(
-                "  [%s] → pred=%d  conf=%.2f",
-                agent.name, verdict.prediction, verdict.confidence,
-            )
-        return verdicts

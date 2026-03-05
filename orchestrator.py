@@ -9,15 +9,6 @@ from __future__ import annotations
 import json
 import logging
 
-try:
-    from langfuse.decorators import observe
-except ImportError:
-    # Fallback if langfuse is not installed
-    def observe(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
-
 from agent_base import BaseAgent
 from llm_provider import get_provider
 from models import AgentVerdict, EntityDossier, SwarmConsensus
@@ -41,7 +32,6 @@ class GlobalOrchestrator(BaseAgent):
         self._fp_cost = cfg.fp_cost
         self._fn_cost = cfg.fn_cost
 
-    @observe(name="L2_orchestrator_decide")
     def decide(
         self,
         dossier: EntityDossier,

@@ -1,7 +1,7 @@
 """
 Base agent interface for all LLM-powered agents (Layer 1 & 2).
 Handles retries, structured JSON parsing, and Langfuse observation.
-Uses the modular LLM provider (OpenAI / Gemini / custom).
+Uses the modular LLM provider (OpenAI / Gemini / custom) via LangChain.
 """
 
 from __future__ import annotations
@@ -10,15 +10,7 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-
-try:
-    from langfuse.decorators import observe
-except ImportError:
-    # Fallback if langfuse is not installed
-    def observe(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
+from typing import Any
 
 from llm_provider import get_provider
 from models import AgentVerdict, EntityDossier
@@ -70,7 +62,6 @@ class BaseAgent(ABC):
 
     # ── Public ──────────────────────────────────────────────────────────
 
-    @observe(name="agent_analyze")
     def analyze(
         self,
         dossier: EntityDossier,
@@ -102,8 +93,8 @@ class BaseAgent(ABC):
 
     # ── LLM call ────────────────────────────────────────────────────────
 
-    def _call_llm(self, prompt: str) -> str:
-        """Call the configured LLM provider."""
+    def _call_llm(self, prompt: str, callbacks: list[Any] | None = None) -> str:
+        """Call the configured LLM provider with optional Langfuse callbacks."""
         system_text = load_prompt("system")
         domain_text = load_prompt("domain")
         system_msg = f"{system_text}\n\n{domain_text}".strip()
@@ -114,6 +105,7 @@ class BaseAgent(ABC):
             model=self.model_name,
             temperature=self.temperature,
             json_mode=True,
+            callbacks=callbacks,
         )
 
     # ── Parsing ─────────────────────────────────────────────────────────
