@@ -11,7 +11,14 @@ import logging
 import re
 from abc import ABC, abstractmethod
 
-from langfuse.decorators import observe
+try:
+    from langfuse.decorators import observe
+except ImportError:
+    # Fallback if langfuse is not installed
+    def observe(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 from llm_provider import get_provider
 from models import AgentVerdict, EntityDossier

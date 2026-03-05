@@ -27,7 +27,7 @@
                 },
                 {
                     "path": "resources/case_1/training/public_lev_1/users 2.json",
-                    "role": "profile", "id_column": "user_id", "format": "json",
+                    "role": "profile", "id_column": "_user_id", "format": "json",
                     "description": "Level 1 training demographic profiles.",
                     "columns": {"user_id": "Citizen ID", "birth_year": "Year of birth", "job": "Occupation", "residence": "Object with city, lat, lng"}
                 }

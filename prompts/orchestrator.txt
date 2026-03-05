@@ -33,4 +33,4 @@
 5. A role with low agreement but high complexity suggests genuine ambiguity — apply extra caution.
 6. Provide your final prediction.
 
-Respond with JSON: {"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}
+Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}
