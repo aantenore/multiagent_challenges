@@ -67,7 +67,12 @@ class AdaptivePipeline:
     # ── Main entry point ────────────────────────────────────────────────
 
     @observe(name="pipeline_run")
-    def run(self, manifest_path: str | Path, results_dir: Path | None = None) -> dict[str, list[PipelineResult]]:
+    def run(
+        self,
+        manifest_path: str | Path,
+        results_dir: Path | None = None,
+        stop_layer: int = 2,
+    ) -> dict[str, list[PipelineResult]]:
         """Execute the full N-stage pipeline.
 
         Returns a dict mapping stage_name → list[PipelineResult].
@@ -96,7 +101,7 @@ class AdaptivePipeline:
 
         for idx, stage in enumerate(stages):
             console.rule(f"[bold yellow]Stage {idx + 1}/{len(stages)}: {stage.name}")
-            results = self._run_stage(manager, idx, stage, results_dir=results_dir)
+            results = self._run_stage(manager, idx, stage, results_dir=results_dir, stop_layer=stop_layer)
             all_results[stage.name] = results
 
         console.rule("[bold cyan]Pipeline Complete")
@@ -111,6 +116,7 @@ class AdaptivePipeline:
         stage_idx: int,
         stage: Stage,
         results_dir: Path | None = None,
+        stop_layer: int = 2,
     ) -> list[PipelineResult]:
         """Process one stage: train cumulatively, then evaluate."""
         # ── 1. Cumulative training ─────────────────────────────────
@@ -169,7 +175,7 @@ class AdaptivePipeline:
                 f"  {stage.name}: predicting…", total=len(eval_dossiers)
             )
             for dossier in eval_dossiers.values():
-                result = self._process_entity(dossier, coordinators)
+                result = self._process_entity(dossier, coordinators, stop_layer)
                 results.append(result)
                 progress.advance(task_id)
 
@@ -185,7 +191,14 @@ class AdaptivePipeline:
             y_pred = [r.final_prediction for r in results if r.entity_id in labels]
             if y_true:
                 console.print(f"\n  [bold cyan]{stage.name} — Evaluation Report[/]")
-                print_report(y_true, y_pred)
+                metrics_dict = print_report(y_true, y_pred)
+                
+                # Write to JSOn if results_dir exists
+                if results_dir:
+                    import json
+                    metrics_path = results_dir / f"metrics_{stage.name}.json"
+                    with open(metrics_path, "w", encoding="utf-8") as f:
+                        json.dump(metrics_dict, f, indent=2)
 
         # ── 6. Store all cases in RAG (Balanced Learning) ──────────
         if labels and self._rag.is_enabled:
@@ -205,6 +218,7 @@ class AdaptivePipeline:
         self,
         dossier: EntityDossier,
         coordinators: list[RoleCoordinator],
+        stop_layer: int = 2,
     ) -> PipelineResult:
         """Process a single entity through L0 → L1 coordinators → L2."""
         eid = dossier.entity_id
@@ -232,6 +246,19 @@ class AdaptivePipeline:
             l0_complexity=complexity,
         )
         verdicts.extend(swarm_consensus_list)
+
+        if stop_layer <= 1:
+            # Aggregate swarm predictions (majority vote)
+            if not swarm_consensus_list:
+                pred = 0
+            else:
+                pred = 1 if sum(v.prediction for v in swarm_consensus_list) / len(swarm_consensus_list) > 0.5 else 0
+            return PipelineResult(
+                entity_id=eid,
+                final_prediction=pred,
+                layer_decided="L1_SwarmConsensus",
+                verdicts=verdicts,
+            )
 
         # Layer 2 — Global Orchestrator
         final_verdict = self._orchestrator.decide(
