@@ -3,7 +3,7 @@
         {
             "name": "level_1",
             "output_file": "predictions_lev1.txt",
-            "ground_truth": "",
+            "ground_truth": "resources/case_1/evaluation/public_lev_1/ground_truth.csv",
             "training_sources": [
                 {
                     "path": "resources/case_1/training/public_lev_1/status 2.csv",
@@ -53,7 +53,7 @@
         {
             "name": "level_2",
             "output_file": "predictions_lev2.txt",
-            "ground_truth": "",
+            "ground_truth": "resources/case_1/evaluation/public_lev_2/public_lev_2/ground_truth.csv",
             "training_sources": [
                 {
                     "path": "resources/case_1/training/public_lev_2/public_lev_2/status.csv",
@@ -102,7 +102,7 @@
         {
             "name": "level_3",
             "output_file": "predictions_lev3.txt",
-            "ground_truth": "",
+            "ground_truth": "resources/case_1/evaluation/public_lev_3/public_lev_3/ground_truth.csv",
             "training_sources": [
                 {
                     "path": "resources/case_1/training/public_lev_3/public_lev_3/status.csv",
