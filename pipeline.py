@@ -321,6 +321,9 @@ class AdaptivePipeline:
 
         # ── Global Consensus Optimization ────────────────────────────────────
         # Calculate Weighted Majority Strength to determine if L2 can be skipped or optimized.
+        from settings import get_settings
+        cfg = get_settings()
+        
         weight_0 = 0.0
         weight_1 = 0.0
         if swarm_consensus_list:
