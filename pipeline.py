@@ -42,7 +42,6 @@ from dossier_builder import DossierBuilder
 from feature_engineer import SlidingWindowExtractor
 from layer0_router import OneClassRouter
 from manifest_manager import ManifestManager
-from metrics import print_report
 from models import EntityDossier, ManifestEntry, PipelineResult, Stage, SwarmConsensus
 from orchestrator import GlobalOrchestrator
 from output_writer import write_predictions
@@ -66,7 +65,6 @@ class AdaptivePipeline:
 
     # ── Main entry point ────────────────────────────────────────────────
 
-    @observe(name="pipeline_run")
     def run(
         self,
         manifest_path: str | Path,
@@ -76,10 +74,6 @@ class AdaptivePipeline:
 
         Returns a dict mapping stage_name → list[PipelineResult].
         """
-        langfuse_context.update_current_trace(
-            session_id=self._session_id,
-            name="mirror_pipeline",
-        )
 
         console.rule("[bold cyan]Mirror Pipeline — Starting")
         console.print(f"Session ID: [bold green]{self._session_id}[/]")
@@ -104,11 +98,12 @@ class AdaptivePipeline:
             all_results[stage.name] = results
 
         console.rule("[bold cyan]Pipeline Complete")
-        console.print(f"\n[bold green]Langfuse Session ID: {self._session_id}[/]\n")
+        console.print("\n[bold green]Pipeline finished successfully.[/]\n")
         return all_results
 
     # ── Stage processing ────────────────────────────────────────────────
 
+    @observe(name="stage_run")
     def _run_stage(
         self,
         manager: ManifestManager,
@@ -117,6 +112,17 @@ class AdaptivePipeline:
         results_dir: Path | None = None,
     ) -> list[PipelineResult]:
         """Process one stage: train on THIS level's data only, then evaluate."""
+        stage_session_id = str(uuid.uuid4())
+        langfuse_context.update_current_trace(
+            session_id=stage_session_id,
+            name=f"mirror_stage_{stage.name}",
+        )
+        
+        # ── Write session ID to separate result file ────────────────
+        if results_dir:
+            session_file = results_dir / f"langfuse_session_{stage.name}.json"
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump({"stage": stage.name, "session_id": stage_session_id}, f, indent=2)
         # ── 0. Reset RAG for this level (each level is self-contained) ──
         if self._rag.is_enabled:
             self._rag.reset()
@@ -140,11 +146,11 @@ class AdaptivePipeline:
             self._router.build_baselines(train_dossiers)
             console.print(f"  [green]✓ L0 baselines built on {len(train_dossiers)} entities[/]")
 
-            # Store training entities in RAG with true_label=0 (well-being)
+            # Store training entities in RAG with pred=0 (well-being)
             if self._rag.is_enabled:
                 for eid, dossier in train_dossiers.items():
                     summary = self._rag.summarise_dossier(dossier)
-                    self._rag.add_case(eid, summary, 0, 0)  # true=0, pred=0
+                    self._rag.add_case(eid, summary, 0)  # pred=0
 
         # ── 2. Evaluation ──────────────────────────────────────────
         eval_sources = stage.evaluation_sources
@@ -190,29 +196,12 @@ class AdaptivePipeline:
         out_path = results_dir / out_file if results_dir else Path(out_file)
         write_predictions(results, out_path)
 
-        # ── 5. Metrics (if ground truth) ───────────────────────────
-        labels = self._load_ground_truth(stage, manager.base_dir)
-        if labels:
-            y_true = [labels[r.entity_id] for r in results if r.entity_id in labels]
-            y_pred = [r.final_prediction for r in results if r.entity_id in labels]
-            if y_true:
-                console.print(f"\n  [bold cyan]{stage.name} — Evaluation Report[/]")
-                metrics_dict = print_report(y_true, y_pred)
-                
-                # Write to JSOn if results_dir exists
-                if results_dir:
-                    import json
-                    metrics_path = results_dir / f"metrics_{stage.name}.json"
-                    with open(metrics_path, "w", encoding="utf-8") as f:
-                        json.dump(metrics_dict, f, indent=2)
-
-        # ── 6. Store all cases in RAG (works with or without labels) ──
+        # ── 5. Store all cases in RAG (self-supervised) ────────────────
         if self._rag.is_enabled:
             for r in results:
                 summary = self._rag.summarise_dossier(eval_dossiers[r.entity_id])
-                true_label = labels.get(r.entity_id) if labels else None
                 self._rag.add_case(
-                    r.entity_id, summary, true_label, r.final_prediction,
+                    r.entity_id, summary, r.final_prediction,
                 )
 
         return results
@@ -275,38 +264,3 @@ class AdaptivePipeline:
     ) -> None:
         self._router.build_baselines(dossiers)
         console.print(f"  [green]✓ L0 baselines built on {len(dossiers)} entities[/]")
-
-    @staticmethod
-    def _load_ground_truth(stage: Stage, base_dir: Path) -> dict[str, int]:
-        """Load ground truth from the stage's ground_truth path."""
-        if not stage.ground_truth:
-            return {}
-
-        p = base_dir / stage.ground_truth if not Path(stage.ground_truth).is_absolute() else Path(stage.ground_truth)
-        if not p.exists():
-            logger.warning("Ground truth not found: %s", p)
-            return {}
-
-        if p.suffix == ".json":
-            raw = json.loads(p.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                return {str(k): int(v) for k, v in raw.items()}
-            if isinstance(raw, list):
-                return {
-                    str(item.get("id", item.get("entity_id", ""))): int(
-                        item.get("label", item.get("prediction", 0))
-                    )
-                    for item in raw
-                }
-        elif p.suffix == ".csv":
-            import pandas as pd
-            df = pd.read_csv(p)
-            return dict(zip(df.iloc[:, 0].astype(str), df.iloc[:, 1].astype(int)))
-        elif p.suffix == ".txt":
-            ids = {
-                line.strip() for line in p.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            }
-            return {eid: 1 for eid in ids}
-
-        return {}

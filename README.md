@@ -182,7 +182,6 @@ cp .env.example .env
 **Pipeline hyperparameters:**
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WINDOW_SIZE` | `3` | Sliding window size for features |
 | `FP_COST` | `1.0` | False Positive cost weight |
 | `FN_COST` | `5.0` | False Negative cost weight |
 | `TOP_K_RAG` | `3` | Number of RAG few-shot examples |
@@ -266,7 +265,6 @@ python build_submission.py
 | `orchestrator.py` | Layer 2 — Smart model economic decider |
 | `rag_store.py` | ChromaDB local RAG (per-level, reset between stages) |
 | `pipeline.py` | N-stage per-level pipeline orchestrator |
-| `metrics.py` | Evaluation (F1, Value Recovery, Mirror Score) |
 | `output_writer.py` | Generates challenge-compliant TXT output |
 | `prompt_loader.py` | Loads prompt templates from `prompts/` |
 | `build_submission.py` | Creates ZIP archive for submission |
@@ -318,13 +316,7 @@ GGGZNWZD
 
 ## 🔬 Metrics
 
-At the end of each stage (if ground truth is provided), the pipeline prints:
-
-- **Confusion Matrix** (TP, FP, FN, TN)
-- **Precision, Recall, F1-Score**
-- **Value Recovery** (asymmetric cost-adjusted metric)
-- **Mirror Score** = `(F1 + Value Recovery) / 2`
-- **Langfuse Session ID** (for trace inspection)
+The pipeline outputs predictions for each stage to `predictions_{stage}.txt`. You can use the `resources\case_1\track-your-submission\how-to-track-your-submission` utility to query your exact metrics via Langfuse.
 
 ---
 

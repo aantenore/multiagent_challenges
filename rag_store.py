@@ -44,6 +44,7 @@ class RAGStore:
                     path=str(cfg.rag_db_dir),
                     settings=ChromaSettings(anonymized_telemetry=False),
                 )
+                self._client = client
                 self._collection = client.get_or_create_collection(
                     name=self._collection_name,
                     metadata={"hnsw:space": "cosine"},
@@ -62,9 +63,8 @@ class RAGStore:
         if not self._enabled or self._collection is None:
             return
         try:
-            client = self._collection._client
-            client.delete_collection(self._collection_name)
-            self._collection = client.get_or_create_collection(
+            self._client.delete_collection(self._collection_name)
+            self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
                 metadata={"hnsw:space": "cosine"},
             )
@@ -78,22 +78,18 @@ class RAGStore:
         self,
         entity_id: str,
         dossier_summary: str,
-        true_label: int | None,
         predicted_label: int,
     ) -> None:
         """Store an evaluated case for future few-shot retrieval.
 
-        Saves both labelled and unlabelled cases. When true_label is None
-        (no ground truth available), stores in self-supervised mode.
+        Stores the pipeline's decision in self-supervised mode.
         """
         if not self._enabled or self._collection is None:
             return
 
         doc_id = hashlib.sha256(
-            f"{entity_id}:{true_label}:{predicted_label}".encode()
+            f"{entity_id}:{predicted_label}".encode()
         ).hexdigest()[:16]
-
-        is_error = (true_label != predicted_label) if true_label is not None else False
 
         self._collection.upsert(
             ids=[doc_id],
@@ -101,20 +97,15 @@ class RAGStore:
             metadatas=[
                 {
                     "entity_id": entity_id,
-                    "true_label": true_label if true_label is not None else -1,
                     "predicted_label": predicted_label,
-                    "is_error": is_error,
-                    "has_ground_truth": true_label is not None,
                     "summary": dossier_summary[:500],
                 }
             ],
         )
         logger.info(
-            "RAG: stored case for %s (true=%s, pred=%d, is_error=%s) — collection count: %d",
+            "RAG: stored case for %s (pred=%d) — collection count: %d",
             entity_id,
-            str(true_label) if true_label is not None else "N/A",
             predicted_label,
-            is_error,
             self._collection.count(),
         )
         logger.debug(

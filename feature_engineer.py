@@ -14,7 +14,6 @@ import pandas as pd
 from statsmodels.tsa.stattools import acf
 
 from models import EntityDossier
-from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class SlidingWindowExtractor:
     """
 
     def __init__(self, window_size: int | None = None) -> None:
-        self._ws = window_size or get_settings().window_size
+        self._ws = window_size or 3
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -170,7 +169,7 @@ class SlidingWindowExtractor:
                 
             # Compute dynamic features based on optimal lag
             feats[f"{col}_optimal_lag_days"] = float(optimal_days)
-            roll_dynamic = series.rolling(f"{optimal_days}D").mean()
+            roll_dynamic = series.rolling(f"{int(optimal_days)}D").mean()
             dyn_mean = float(roll_dynamic.iloc[-1])
             feats[f"{col}_dynamic_mean"] = dyn_mean
             feats[f"{col}_dynamic_deviation"] = float(series.iloc[-1] - dyn_mean)

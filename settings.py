@@ -45,7 +45,6 @@ class Settings(BaseSettings):
     # ── Pipeline Hyperparameters ────────────────────────────────────────
     l0_lower_threshold: float = 0.15
     l0_upper_threshold: float = 0.85
-    window_size: int = 3
     fp_cost: float = 1.0
     fn_cost: float = 5.0
 

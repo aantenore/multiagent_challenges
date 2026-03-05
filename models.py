@@ -81,10 +81,6 @@ class Stage(BaseModel):
     evaluation_sources: list[ManifestEntry] = Field(
         default_factory=list, description="Sources used to predict/evaluate on this stage"
     )
-    ground_truth: str = Field(
-        default="",
-        description="Optional path to ground-truth labels (JSON/CSV/TXT) for this stage",
-    )
     output_file: str = Field(
         default="",
         description="Output predictions filename for this stage, e.g. 'predictions_lev1.txt'",

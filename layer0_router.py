@@ -100,7 +100,7 @@ class OneClassRouter:
         # Fit IsolationForest
         self._iso = IsolationForest(
             n_estimators=100,
-            contamination=0.05,
+            contamination="auto",
             random_state=42,
         )
         self._iso.fit(X_scaled)
