@@ -74,6 +74,18 @@ If the series is too short or irregular to find an ACF peak, it seamlessly falls
 ```
 
 
+---
+
+### Layer 0 — IsolationForest One-Class Engine
+
+- **Fit phase (Single-Pass):** The Isolation Forest is instantiated and trained exactly ONCE per level, exclusively on that level's Training Set (which acts as the Class 0 mathematical baseline).
+- **RAG Warm-up Phase:** After fitting, L0 predicts on its own training set. Thanks to the `contamination="auto"` parameter, it identifies edge cases. These outliers are evaluated by the L1/L2 LLM chain, and their final resolutions are saved into **ChromaDB**. This transforms ambiguous training records into a "Long-Term Memory" (few-shot examples) for the agents.
+- **Evaluation phase:** The locked L0 model evaluates new incoming data.
+  - **Inlier** (inside boundary) → emit `pred=0` at zero LLM cost.
+  - **Outlier** (outside boundary) → escalate to L1 with `DetectionMetadata` (deviating features). The LLMs will now query the warmed-up RAG to cross-reference similar historical cases.
+
+### Layer 1 — Anti-False-Positive Filter (LLM Agents)
+
 L1 agents do NOT discover anomalies in numbers (L0 does that). They act as **contextual false-positive filters**:
 - Read the persona, profile, and lifestyle context.
 - **RAG-Assisted**: Query the memory bank for similar cases handled during the warm-up phase.
