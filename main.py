@@ -49,24 +49,34 @@ def main() -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
     
-    log_file = log_dir / "session.log"
+    actions_file = log_dir / "actions.log"
+    troubleshoot_file = log_dir / "troubleshooting.log"
 
     # Console handler respects --log-level
     console_handler = RichHandler(rich_tracebacks=True, console=Console(stderr=True))
     console_handler.setLevel(getattr(logging, args.log_level))
 
-    # File handler is ALWAYS DEBUG for troubleshooting
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
+    # Actions file is INFO for a clean, expressive flow
+    actions_handler = logging.FileHandler(actions_file, encoding="utf-8")
+    actions_handler.setLevel(logging.INFO)
+    actions_handler.setFormatter(
+        logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
+    )
+
+    # Troubleshoot file is ALWAYS DEBUG for deep inspection
+    troubleshoot_handler = logging.FileHandler(troubleshoot_file, encoding="utf-8")
+    troubleshoot_handler.setLevel(logging.DEBUG)
+    troubleshoot_handler.setFormatter(
         logging.Formatter("[%(asctime)s] %(name)s [%(levelname)s] %(message)s")
     )
 
+    # Re-apply BasicConfig
+    logging.getLogger().handlers.clear()
     logging.basicConfig(
-        level=logging.DEBUG,  # Root logger must be DEBUG to feed the file handler
-        handlers=[console_handler, file_handler],
+        level=logging.DEBUG,  # Root logger must be DEBUG to feed the troubleshoot handler
+        handlers=[console_handler, actions_handler, troubleshoot_handler],
     )
-    logging.info("Detailed logs written to %s", log_file)
+    logging.info("Logs saved: %s (flow) and %s (debug)", actions_file.name, troubleshoot_file.name)
 
     # ── Run pipeline ────────────────────────────────────────────────
     from pipeline import AdaptivePipeline
