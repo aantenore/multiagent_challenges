@@ -1,144 +1,69 @@
-# 🪞 Mirror — Universal Adaptive Multi-Agent Framework
+# 🪞 Mirror: The Infinite Adaptive Triage Engine
 
-Mirror is a production-grade, domain-agnostic **N-stage multi-agent classification pipeline**. It is designed to solve high-stakes anomaly detection challenges (e.g., healthcare monitoring, financial fraud, industrial predictive maintenance) by marrying **statistical machine learning** with **hierarchical LLM reasoning**.
+> **"Identity is a variable. Context is the only constant."**
 
-The framework optimizes for **Agentic Efficiency**, **F1-Score**, and **Economic Value Recovery** through an asymmetric cost-aware decision engine.
-
----
-
-## 🏛️ Architecture Overview: The 3-Tier Hierarchy
-
-Mirror uses a multi-layered defense-in-depth approach. Each layer filters data, escalating only the most complex cases to the next, more expensive tier.
-
-### Visual Architecture Flow
-```mermaid
-graph TD
-    M[manifest.json] --> P[Pipeline Orchestrator]
-    P --> T[Stage N: Training Phase]
-    T --> FE[Feature Engineering: ACF + Windowing]
-    FE --> L0[Layer 0: Hybrid Filter]
-    
-    L0 -- Inlier --> OUT0[PRED=0: baseline]
-    L0 -- Outlier --> L1[Layer 1: Domain Swarm]
-    
-    L1 -- Consensus --> L2[Layer 2: Smart Orchestrator]
-    L2 --> OUT[PRED=0/1: Final Decision]
-    
-    OUT --> RAG[ChromaDB Memory]
-    RAG -- Few-Shot --> L1
-```
-
-### Layer Descriptions
-
-#### **Layer 0 — The Sentry (IsolationForest + Nano LLM)**
-- **Role**: High-throughput gatekeeper.
-- **Mechanism**: Can be configured as `isolation` (Pure ML) or `llm` (Nano-tier LLM).
-- **Isolation Forest**: Learned boundary of "Normal Behavior" from training data.
-- **Nano Sanity**: In `llm` mode, a low-cost model (GPT-5-Nano) performs a quick triage, dismissing statistical noise and escalating strictly relevant anomalies.
-
-#### **Layer 1 — The Experts (Cheap Domain Swarm)**
-- **Role**: Contextual Anti-False-Positive Filter.
-- **Mechanism**: Parallel `RoleCoordinator` agents (temporal, spatial, etc.).
-- **Swarm Intelligence**: Multiple agents per role reach a `SwarmConsensus` via confidence-weighted voting. Overcomes "stochastic errors" of single LLM calls.
-
-#### **Layer 2 — The Auditor (Smart Orchestrator)**
-- **Role**: Final Economic Decision.
-- **Mechanism**: Smart-tier LLM (Gemini-3.1-Pro / GPT-4).
-- **Function**: Reconciles conflicting swarm verdicts, raw features, and lifestyle context to decide if the cost of an intervention (FN vs FP) is justified.
+Mirror is a high-performance, **zero-hardcode**, multi-agent classification framework engineered for the Google Deepmind Agentic Challenge 2026. It is designed to be perfectly domain-agnostic, treating every industry—from healthcare to finance—as a set of abstract analytical roles.
 
 ---
 
-## 🧬 Killer Features: Technical Deep Dive
+## 🏛️ Architecture: The Hierarchical Sieve
 
-### 1. ACF Dynamic Window Sizing
-Unlike static systems that use fixed rolling windows (e.g., "last 5 days"), Mirror **learns the natural rhythm** of the entity.
-- **Autocorrelation (ACF)**: Using `statsmodels`, it identifies the dominant lag (peak autocorrelation).
-- **Adaptive Extraction**: If a citizen has a 3-day workout cycle, features are calculated over 3-day windows.
-- **Impact**: Removes false alarms caused by natural cyclical fluctuations.
+Mirror minimizes **Critical Regret** (False Negatives) through an asymmetric three-layer filtering process.
 
-### 2. RAG Warm-Up & Continuous Learning
-Mirror implements a **Self-Supervised Memory** strategy:
-1. **Fit**: L0 is trained on Class 0 data.
-2. **Warm-up**: The system runs a "Sanity Check" on the training set.
-3. **Memorization**: Outliers found in the training set are analyzed by L1/L2 and their reasoning is saved to **ChromaDB**.
-4. **Few-Shot Retrieval**: During evaluation, L1 agents retrieve these cases to avoid repeating past mistakes.
+### 1. Layer 0: The Sentry (Statistical Gateway)
+- **Engine**: Hybrid IsolationForest (zero-cost ML) or Nano-LLM (cost-optimized generative).
+- **Dynamic Feature Extraction**: Automatically processes *any* numeric column in *any* manifest role.
+- **Rhythm Discovery**: Uses Autocorrelation (ACF) to synchronize rolling windows with entity-specific cycles, preventing normal fluctuations from triggering alerts.
 
-### 3. Domain Agnosticity
-Mirror is **Role-Inferred**. It does not care about the physical meaning of your data.
-- **Automatic Scaling**: Describe a role in `manifest.json` (e.g., `"role": "financial"`), and the pipeline will dynamically spawn specialized coordinators without a single line of code change.
-- **Universal Prompts**: The reasoning is steered by externalized markdown templates in `prompts/`.
+### 2. Layer 1: The Swarm (Domain Experts)
+- **Expert Coordination**: Dynamically instantiates parallel expert agents for every unique role defined in your manifest.
+- **Consensus Logic**: Weighted voting among experts with distinct personas and temperatures to eliminate stochastic hallucinations.
+
+### 3. Layer 2: The Auditor (Economic Arbitration)
+- **Weighted Reasoning**: Reconciles expert transcripts using high-reasoning models (Smart-tier).
+- **Cost-Awareness**: Decisions are biased by the `FN_COST` and `FP_COST` ratio, ensuring a rational balance between safety and operation.
 
 ---
 
-## ⚙️ Configuration & Hyperparameters
+## ⚙️ The Abstraction Pattern: Configuring for Any Domain
 
-### Model Tiering
-The framework resolves models based on "brain-power" requirements:
-- **`nano`**: Extremely cheap, high latency.
-- **`cheap`**: Balanced, handles broad context.
-- **`smart`**: High reasoning, expensive, used for final ties.
+Mirror has **Zero Hardcoded Roles**. Every role name is an abstraction:
 
-### Key `.env` Variables
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `LLM_PROVIDER` | `gemini` | `openai` or `gemini`. |
-| `L0_ENGINE` | `llm` | `isolation` (Math) or `llm` (Generative). |
-| `BYPASS_L0` | `False` | For direct L1/L2 testing (Pure LLM mode). |
-| `FN_COST` | `5.0` | Weight of False Negatives (Cost of missing a crisis). |
-| `FP_COST` | `1.0` | Weight of False Positives (Cost of unnecessary support). |
-| `SWARM_MAX_AGENTS`| `5` | Maximum redundancy per role. |
+- **Descriptor Roles** (Defined in `settings.py`):
+  - `profile`: Defines the "Identity" of the entity (e.g., patient record, user profile).
+  - `context`: Defines the "Knowledge Base" (e.g., medical guidelines, fraud manuals).
+- **Analytical Roles** (Defined in `manifest.json`):
+  - Any role name (e.g., `heart_rate`, `tx_logs`, `gps_pings`) automatically triggers a dedicated Swarm Expert and Feature Analysis.
 
 ---
 
-## 📂 Project Structure
+## 📚 The Book of Mirror: Legendary Documentation
 
-- `main.py`: Entry point. Manages logging (`actions.log`, `troubleshooting.log`) and runs.
-- `pipeline.py`: The heart. Coordinates N-stages of Fit-Predict.
-- `layer0_router.py`: Implements the Hybrid ML/LLM gatekeeper.
-- `domain_swarm.py`: Parallel swarm management logic.
-- `feature_engineer.py`: Signal processing (ACF, Velocity, Rolling stats).
-- `rag_store.py`: ChromaDB abstraction.
-- `llm_provider.py`: Multi-tier model factory.
-- `prompts/`: Markdown templates. Start here to change domains.
+| Volume | Title | Content Focus |
+|--------|-------|---------------|
+| **Vol. I** | [**Theory of Operation**](docs/Theory_of_Operation.md) | Hierarchical triage, ACF theory, and RAG PURGE cycles. |
+| **Vol. II** | [**Domain Adaptation**](docs/Domain_Adaptation_Guide.md) | Morphing Mirror for Fraud, Maintenance, or Clinical use. |
+| **Vol. III**| [**Developer Manual**](docs/Developer_Manual.md) | Pipeline logic, tiering costs, and parallelism. |
+| **Vol. IV** | [**Architecture Deep Dive**](docs/Architecture_Deep_Dive.md) | Dossier construction, swarm mechanics, and state flow. |
+| **Vol. V**  | [**Feature Engineering**](docs/Feature_Engineering_Reference.md) | ACF synchronization math and dynamic namespacing. |
+| **Vol. VI** | [**Configuration Matrix**](docs/Configuration_Matrix.md) | Comprehensive param reference for settings.py and .env. |
+| **Vol. VII**| [**Troubleshooting**](docs/Troubleshooting_Deep_Dive.md) | Langfuse tracing, error state resolution, and tuning. |
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Execution
 
-### 1. Installation
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+# 1. Setup
 pip install -r requirements.txt
 cp .env.example .env
-```
 
-### 2. Run the Challenge
-```bash
-# Production Run
+# 2. Production Run
 python main.py -m manifest.json
 
-# Debugging Run (with bypass)
+# 3. Bypass Training (Cold Start)
 python main.py -m bypass_manifest.json --log-level DEBUG
 ```
 
-### 3. Evaluating Results
-Results are saved per run in `runs/run_TIMESTAMP/results/`:
-- `predictions_STAGE.txt`: Submission file.
-- `audit_log_STAGE.json`: Deep trace for Langfuse/Analysis.
-- `train_audit_log_STAGE.json`: Results of the sanity check.
-
 ---
-
-## 🔬 Alternative Execution Modes
-
-| Mode | Configuration | Use Case |
-|------|---------------|----------|
-| **Standard** | `L0_ENGINE=isolation` | High speed, lowest cost, mathematical baseline. |
-| **Hybrid** | `L0_ENGINE=llm` | Better FP rejection at Layer 0. |
-| **Cold Start**| `BYPASS_L0=True` | Pure agentic reasoning. No training data required. |
-
----
-
-License: Challenge submission — Reply Mirror 2026.
-Developed for the **Google Deepmind Agentic Challenge**.
+*Developed for the Google Deepmind Agentic Challenge 2026.*

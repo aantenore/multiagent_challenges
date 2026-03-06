@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from agent_base import BaseAgent
+from settings import get_settings
 from models import AgentVerdict, EntityDossier, ManifestEntry, SwarmConsensus
 from langfuse_utils import get_current_session_id, set_current_session_id
 from prompt_loader import load_prompt
@@ -177,42 +178,38 @@ class RoleCoordinator:
         return min(1.0, max(0.0, blended))
 
     def _data_variance_heuristic(self, dossier: EntityDossier) -> float:
-        """Quick data-variance heuristic per role. Returns 0-1."""
-        match self.role:
-            case "temporal":
-                data = dossier.temporal_data
-                if len(data) < 3:
-                    return 0.2
-                # Variance in numeric fields → higher complexity
-                numeric_vals = []
-                for row in data[-10:]:
-                    for v in row.values():
-                        try:
-                            f_val = float(v)
-                            if not math.isnan(f_val):
-                                numeric_vals.append(f_val)
-                        except (ValueError, TypeError):
-                            pass
-                if numeric_vals:
-                    mean = sum(numeric_vals) / len(numeric_vals)
-                    var = sum((x - mean) ** 2 for x in numeric_vals) / len(numeric_vals)
-                    # Normalise: high variance → high complexity
-                    return min(1.0, math.sqrt(var) / (mean + 1e-6))
-                return 0.5
-            case "spatial":
-                data = dossier.spatial_data
-                if len(data) < 2:
-                    return 0.2
-                # Number of distinct cities → more spatial diversity → more complex
-                cities = {str(p.get("city", "")) for p in data if isinstance(p, dict)}
-                return min(1.0, len(cities) / 5.0)
-            case "context":
-                if not dossier.context_data:
-                    return 0.1
-                # Longer context → more nuance → more complex
-                return min(1.0, len(dossier.context_data) / 2000.0)
-            case _:
-                return 0.3
+        """Quick data-variance heuristic per role. Returns 0-1.
+        
+        Now completely generic: handles any domain_data role without hardcoded names.
+        """
+        if self.role == self._cfg.context_role:
+             if not dossier.context_data: return 0.1
+             return min(1.0, len(dossier.context_data) / 2000.0)
+
+        data = dossier.domain_data.get(self.role, [])
+        if not data:
+            return 0.2
+        
+        if len(data) < 2:
+            return 0.1
+
+        # Generic numeric variance check
+        numeric_vals = []
+        for row in data[-10:]:
+            for v in row.values():
+                try:
+                    f_val = float(v)
+                    if not math.isnan(f_val):
+                        numeric_vals.append(f_val)
+                except (ValueError, TypeError):
+                    pass
+        
+        if numeric_vals:
+            mean = sum(numeric_vals) / len(numeric_vals)
+            var = sum((x - mean) ** 2 for x in numeric_vals) / len(numeric_vals)
+            return min(1.0, math.sqrt(var) / (mean + 1e-6))
+        
+        return 0.3
 
     def _decide_n_agents(self, complexity: float) -> int:
         """Map complexity linearly to agent count.

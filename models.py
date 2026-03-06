@@ -126,7 +126,7 @@ class EntityDossier(BaseModel):
     entity_id: str = Field(..., description="Unique entity identifier")
     domain_data: dict[str, list[dict[str, Any]]] = Field(
         default_factory=dict,
-        description="Dynamic bucket for all domain-specific data (temporal, spatial, etc.)",
+        description="Dynamic bucket for all domain-specific data as defined in the manifest.",
     )
     profile_data: dict[str, Any] = Field(
         default_factory=dict, description="Static user profile"

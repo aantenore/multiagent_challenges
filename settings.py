@@ -57,6 +57,19 @@ class Settings(BaseSettings):
     # "isolation" (IsolationForest, zero-cost) 
     # "llm" (Nano model, very cheap)
     l0_engine: str = "llm"
+    bypass_l0: bool = False
+
+    # ── Role Names (Configurable Abstractions) ──────────────────────────
+    profile_role: str = "profile"
+    context_role: str = "context"
+
+    # ── Feature Engineering Configuration ───────────────────────────────
+    feature_ignore_columns: list[str] = [
+        "CitizenID", "EventID", "user_id", "_user_id", 
+        "Timestamp", "id", "ID", "entity_id"
+    ]
+    default_window_ma3: str = "3D"
+    default_window_ma7: str = "7D"
 
     # ── Swarm Configuration ──────────────────────────────────────────────
     swarm_min_agents: int = 1

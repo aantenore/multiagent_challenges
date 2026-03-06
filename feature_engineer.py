@@ -14,6 +14,7 @@ import pandas as pd
 from statsmodels.tsa.stattools import acf
 
 from models import EntityDossier
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 class SlidingWindowExtractor:
     """Extract trend features over configurable sliding windows.
 
-    For each numeric column in the temporal data it computes:
+    For each numeric column in the domain data it computes:
     - mean, std, min, max
     - delta  (last - first)
     - velocity (delta / window_span_days)
@@ -50,20 +51,7 @@ class SlidingWindowExtractor:
 
     # ── Temporal ────────────────────────────────────────────────────────
 
-    _NUMERIC_COLS = {
-        "PhysicalActivityIndex",
-        "SleepQualityIndex",
-        "EnvironmentalExposureLevel",
-    }
-
-    _EVENT_RISK_MAP: dict[str, int] = {
-        "routine check-up": 0,
-        "lifestyle coaching session": 0,
-        "preventive screening": 1,
-        "follow-up assessment": 2,
-        "emergency visit": 3,
-        "specialist consultation": 3,
-    }
+    # --- Abstract Analytics ---
 
     def _extract_generic_features(self, role: str, rows: list[dict[str, Any]]) -> dict[str, float]:
         """Compute per-column window stats + trend features for ANY role."""
@@ -84,6 +72,7 @@ class SlidingWindowExtractor:
             return feats
 
         # Auto-detect numeric columns (excluding IDs and ignored columns)
+        cfg = get_settings()
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         cols_to_process = [c for c in numeric_cols if c not in cfg.feature_ignore_columns]
 
@@ -163,36 +152,17 @@ class SlidingWindowExtractor:
             feats[f"{col}_dynamic_mean"] = dyn_mean
             feats[f"{col}_dynamic_deviation"] = float(series.iloc[-1] - dyn_mean)
 
-        # Event-type risk encoding
-        if "EventType" in df.columns:
-            event_types = df["EventType"].dropna().astype(str).tolist()
-            risk_scores = [self._EVENT_RISK_MAP.get(e, 0) for e in event_types]
-            feats["max_event_risk"] = float(max(risk_scores)) if risk_scores else 0.0
-            feats["mean_event_risk"] = float(np.mean(risk_scores)) if risk_scores else 0.0
-            feats["has_emergency"] = 1.0 if any(s >= 3 for s in risk_scores) else 0.0
-            feats["has_specialist"] = 1.0 if "specialist consultation" in event_types else 0.0
-            feats["n_preventive_screenings"] = float(
-                sum(1 for e in event_types if e == "preventive screening")
-            )
-        else:
-            feats["max_event_risk"] = 0.0
-            feats["mean_event_risk"] = 0.0
-            feats["has_emergency"] = 0.0
-            feats["has_specialist"] = 0.0
-            feats["n_preventive_screenings"] = 0.0
-
         return feats
 
-    # ── Spatial ─────────────────────────────────────────────────────────
+    # ── Specialized Geometric Extras ────────────────────────────────────
 
     def _spatial_features(self, rows: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute mobility radius, location entropy, outlier travel count."""
+        """Compute generic mobility metrics if lat/lng are present."""
         feats: dict[str, float] = {}
-        lats = [float(r["lat"]) for r in rows if "lat" in r]
-        lngs = [float(r["lng"]) for r in rows if "lng" in r]
+        lats = [float(r.get("lat", 0)) for r in rows if "lat" in r]
+        lngs = [float(r.get("lng", 0)) for r in rows if "lng" in r]
 
-        if not lats:
-            return feats
+        if not lats: return feats
 
         feats["n_locations"] = float(len(lats))
         feats["lat_std"] = float(np.std(lats))
@@ -200,36 +170,23 @@ class SlidingWindowExtractor:
 
         # Approx mobility radius (std of distance from centroid in km)
         clat, clng = np.mean(lats), np.mean(lngs)
-        dists = [
-            self._haversine(clat, clng, la, lo)
-            for la, lo in zip(lats, lngs)
-        ]
+        dists = [self._haversine(clat, clng, la, lo) for la, lo in zip(lats, lngs)]
         feats["mobility_radius_km"] = float(np.std(dists))
         feats["max_dist_from_home_km"] = float(max(dists)) if dists else 0.0
-
-        # Distinct cities
-        cities = {r.get("city", "") for r in rows if r.get("city")}
-        feats["n_distinct_cities"] = float(len(cities))
 
         return feats
 
     # ── Profile ─────────────────────────────────────────────────────────
 
-    def _profile_features(self, profile: dict[str, Any]) -> dict[str, float]:
-        """Extract all numeric features from profile, including nested ones like residence."""
+    def _profile_features(self, profile: dict[str, Any], prefix: str = "") -> dict[str, float]:
+        """Recursively extract all numeric features from any profile structure."""
         feats: dict[str, float] = {}
-        
         for k, v in profile.items():
-            # Handle flattened numeric values
+            key = f"{prefix}_{k}".lstrip("_")
             if isinstance(v, (int, float)) and not isinstance(v, bool):
-                feats[k.lstrip("_")] = float(v)
-            
-            # Handle nested residence object
-            elif k == "residence" and isinstance(v, dict):
-                for rk, rv in v.items():
-                    if isinstance(rv, (int, float)) and not isinstance(rv, bool):
-                        feats[f"residence_{rk}"] = float(rv)
-        
+                feats[key] = float(v)
+            elif isinstance(v, dict):
+                feats.update(self._profile_features(v, prefix=key))
         return feats
 
     # ── Utils ───────────────────────────────────────────────────────────

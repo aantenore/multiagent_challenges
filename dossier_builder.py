@@ -12,6 +12,7 @@ import pandas as pd
 
 from data_loader import load_file
 from models import EntityDossier, ManifestEntry
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
