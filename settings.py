@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     team_name: str = "A(CC)I-Tua"
 
     # ── Mathematical Filter (Pillar 1) ──────────────────────────────────
-    filter_upper_threshold: float = 0.85
+    filter_upper_threshold: float = 0.0  # Set to 0.0 to disable 'Grey Area' (all stable entities skip LLMs)
     filter_skip_enabled: bool = True
     filter_z_score_threshold: float = 2.0  # Z-Score deviation to trigger anomaly
     fp_cost: float = 3.0
