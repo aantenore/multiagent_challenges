@@ -15,6 +15,13 @@ justified by life context. If justified → 0. If not → confirm 1.
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
+import numpy as np
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+
 from agent_base import BaseAgent
 from llm_provider import get_provider
 from models import AgentVerdict, DetectionMetadata, EntityDossier
