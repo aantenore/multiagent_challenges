@@ -6,7 +6,7 @@ The system processes data in **N discrete stages**, where each stage isolates it
 
 ---
 
-## 🏗️ 3-Tier Hybrid Architecture
+## 🏗️ 3-Tier Multi-Agent Architecture
 
 Mirror implements a hierarchical defense-in-depth strategy, using tiered LLM models to maximize performance while minimizing economic cost.
 
@@ -52,49 +52,51 @@ Mirror implements a hierarchical defense-in-depth strategy, using tiered LLM mod
 
 ---
 
-## 🚀 Key Innovations
+## 🧬 Core Intelligence Components
 
 ### 1. Dynamic Time-Aware Feature Extraction (ACF)
 To maximize **Agentic Efficiency**, Mirror adapts to the unique physiological or behavioral rhythms of each entity.
 - **Auto-Lag Detection**: Uses `statsmodels` to compute the **Autocorrelation (ACF)** of historical series. The system automatically identifies the dominant rhythm (e.g., circadian or weekly) and sizes its sliding windows accordingly.
 - **Rolling Windows**: Extracts `3D` and `7D` rolling statistics (mean, deviation, velocity, slope) using `pandas`, handling irregular sampling intervals natively.
 
-### 2. Hybrid Layer 0 Anomaly Engine
+### 2. Layer 0 — Hybrid Anomaly Engine
 Layer 0 acts as a high-throughput, low-cost gatekeeper.
-- **Engine Selection**: Configurable via `L0_ENGINE` (`isolation` or `llm`).
-- **Isolation Forest**: Fits a zero-cost mathematical model on the training set's Class 0 data.
-- **Nano-LLM Verification**: If configured, it uses a **Nano-tier LLM** (GPT-5-Nano) to provide a secondary sanity check on outliers before escalation, reducing false positives at the earliest possible stage.
+- **Fit phase (Single-Pass):** The Isolation Forest is trained exactly ONCE per level on the training set.
+- **RAG Warm-up Phase:** L0 predicts on its own training set; identified outliers are evaluated by LLMs and resolutions are saved into **ChromaDB** as "Long-Term Memory" (few-shot examples).
+- **Execution**: Engine is configurable via `L0_ENGINE` (`isolation` or `llm`). If `llm` is active, a **Nano-tier LLM** provides a secondary sanity check on outliers before escalation.
 
-### 3. Modular 3-Tier Model System
+### 3. Layer 1 — Anti-False-Positive Swarm
+L1 agents act as **contextual filters**, not data discoverers.
+- **Swarm Intelligence**: Spawns role-specific agents (temporal, spatial, etc.) to justify anomalies.
+- **RAG-Assisted**: Queries the memory bank for similar cases handled during the warm-up phase.
+- **Dynamic Scaling**: The number of agents per role scales from 1 to 5 based on case complexity.
+
+### 4. Layer 2 — Orchestrator (Economic Decider)
+The final stage uses a **Smart-tier LLM** to perform an economic trade-off analysis. It reconciles conflicting swarm consensus with raw data to make the final submission-critical decision.
+
+---
+
+## 🔌 Multi-Tier LLM Model System
+
 Mirror automatically resolves model names based on the required "tier" for the task:
 
-| Tier | Role | OpenAI | Google Gemini |
-|------|------|--------|---------------|
+| Tier | Role | OpenAI Model | Google Gemini Model |
+|------|------|--------------|---------------------|
 | **Nano** | L0 verification | `gpt-5-nano` | `gemini-3.1-flash-lite` |
 | **Cheap** | L1 Swarm Experts | `gpt-5-mini` | `gemini-3-flash` |
 | **Smart** | L2 Orchestration | `gpt-5.4` | `gemini-3.1-pro` |
-
-### 4. Parallel Swarm Intelligence
-- **Role Coordinators**: Spawns specialized swarms (temporal, spatial, etc.) based on the incoming data roles defined in the manifest.
-- **Dynamic Scaling**: The number of agents in a swarm scales linearly with the case's complexity (1 to 5 agents).
-- **Consensus Voting**: Agents use staggered temperatures and confidence-weighted voting to reach a `SwarmConsensus`.
 
 ---
 
 ## 📊 Observability & Traceability
 
-Mirror integrates deeply with **Langfuse** for production monitoring, using a granular session ID strategy to allow for precise debugging:
-
-- **Naming Convention**: `{phase}_{run_id}_{stage_name}`
-- **Phases**:
-    - `train`: RAG population and memory warm-up.
-    - `predict_train`: Sanity checks on the training set.
-    - `predict_eval`: Official production evaluation.
-- **Granularity**: This allows you to drill down into a specific stage (e.g., `stage_1`) of a specific run without mixing traces.
+Mirror integrates deeply with **Langfuse** for production monitoring, using a granular session ID strategy:
+- **Naming Convention**: `{phase}_{run_id}_{stage_name}` (e.g., `predict_eval_20260306_stage_1`).
+- **Phases**: `train` (warm-up), `predict_train` (sanity check), `predict_eval` (production).
 
 ---
 
-## 📁 Project Structure
+## 📁 Project Structure & Tech Stack
 
 | File | Purpose |
 |------|---------|
@@ -104,40 +106,36 @@ Mirror integrates deeply with **Langfuse** for production monitoring, using a gr
 | `feature_engineer.py` | Advanced ACF-based rolling window feature extraction. |
 | `domain_swarm.py` | Swarm intelligence layer with parallel Role Coordinators. |
 | `orchestrator.py` | Final Layer 2 smart model for economic trade-off decisions. |
-| `rag_store.py` | ChromaDB vector store for few-shot learning and memory persistence. |
-| `llm_provider.py` | Clean abstraction for multi-tier model resolution. |
+| `rag_store.py` | ChromaDB local RAG (per-level, reset between stages). |
+| `llm_provider.py` | Modular LLM provider (OpenAI, Gemini, extensible). |
+| `models.py` | Pydantic data models for dossiers and verdicts. |
 
 ---
 
-## 🛠️ Setup & Execution
+## 🛠️ Configuration & Prompting
 
-### 1. Installation
+### Prompt Placeholders
+All LLM prompts are externalized in `prompts/`. Key placeholders include:
+- **L1 Agents**: `{role}`, `{semantic_section}`, `{data_slice}`, `{rag_section}`.
+- **L2 Orchestrator**: `{verdict_lines}`, `{features_json}`, `{fp_cost}`, `{fn_cost}`.
+
+### Environment Settings (.env)
+- `L0_ENGINE`: `llm` or `isolation`.
+- `SWARM_MAX_AGENTS`: Default `5`.
+- `FN_COST` / `FP_COST`: Asymmetric cost weights (e.g., 5.0 vs 1.0).
+
+---
+
+## 🚀 Execution
+
 ```bash
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-### 2. Configuration
-Edit `.env` to set your providers and cost weights.
-```env
-LLM_PROVIDER=gemini
-L0_ENGINE=llm  # or isolation
-FN_COST=5.0
-FP_COST=1.0
-```
-
-### 3. Execution
-```bash
-# Run all stages
+# Run all stages defined in manifest.json
 python main.py -m manifest.json
 
 # Run a specific stage
 python main.py -m manifest.json --stage level_1
 ```
 
----
-
-## 🔬 Metrics & Compliance
-Mirror generates `predictions_{stage}.txt` containing ONLY the IDs of entities flagged as `1`. You can upload these to the challenge validator to track **Value Recovery** and **F1-Score**.
+Mirror generates `predictions_{stage}.txt` containing ONLY the ASCII IDs of entities flagged as `1`.
 
 License: Challenge submission — Reply Mirror 2026.
