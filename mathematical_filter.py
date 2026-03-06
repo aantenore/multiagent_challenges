@@ -158,8 +158,8 @@ class MathematicalFilter:
         """Slide window and return the index where deviation > threshold."""
         series = df[col]
         
-        rolling_mean = series.rolling(window=window_size*2, min_periods=window_size).mean()
-        rolling_std = series.rolling(window=window_size*2, min_periods=window_size).std()
+        rolling_mean = series.rolling(window=window_size*6, min_periods=window_size).mean()
+        rolling_std = series.rolling(window=window_size*6, min_periods=window_size).std()
         
         max_z = 0.0
         trigger_idx = None
