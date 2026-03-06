@@ -30,10 +30,14 @@ class Settings(BaseSettings):
     google_api_key: str = ""
 
     # ── Model Configuration ─────────────────────────────────────────────
-    cheap_model_name: str = "gpt-5-nano"
-    smart_model_name: str = "gpt-5.2"
+    nano_model_name: str = "gpt-5-nano"
+    cheap_model_name: str = "gpt-5-mini"
+    smart_model_name: str = "gpt-5.4"
+    
+    gemini_nano_model_name: str = "gemini-3.1-flash-lite-preview"
     gemini_cheap_model_name: str = "gemini-3-flash-preview"
     gemini_smart_model_name: str = "gemini-3.1-pro-preview"
+    
     model_temperature: float = 0.1
     max_agent_retries: int = 3
 
@@ -49,8 +53,10 @@ class Settings(BaseSettings):
     fp_cost: float = 3.0
     fn_cost: float = 5.0
 
-    # ── Layer 0 One-Class Engine ────────────────────────────────────────
-    # IsolationForest only — no user-tunable weights needed
+    # ── Layer 0 Engine ──────────────────────────────────────────────────
+    # "isolation" (IsolationForest, zero-cost) 
+    # "llm" (Nano model, very cheap)
+    l0_engine: str = "llm"
 
     # ── Swarm Configuration ──────────────────────────────────────────────
     swarm_min_agents: int = 1

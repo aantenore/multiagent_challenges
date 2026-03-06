@@ -82,6 +82,7 @@ class OpenAIProvider(BaseLLMProvider):
         cfg = get_settings()
         self._api_key = cfg.openai_api_key
         self._models = {
+            "nano": cfg.nano_model_name,
             "cheap": cfg.cheap_model_name,
             "smart": cfg.smart_model_name,
         }
@@ -128,6 +129,7 @@ class GeminiProvider(BaseLLMProvider):
         cfg = get_settings()
         self._api_key = cfg.google_api_key
         self._models = {
+            "nano": cfg.gemini_nano_model_name,
             "cheap": cfg.gemini_cheap_model_name,
             "smart": cfg.gemini_smart_model_name,
         }

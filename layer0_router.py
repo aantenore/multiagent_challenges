@@ -15,21 +15,16 @@ justified by life context. If justified → 0. If not → confirm 1.
 
 from __future__ import annotations
 
-import logging
-from typing import Any
-
-import numpy as np
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-
+from agent_base import BaseAgent
+from llm_provider import get_provider
 from models import AgentVerdict, DetectionMetadata, EntityDossier
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-class OneClassRouter:
-    """One-Class Anomaly Engine: IsolationForest.
+class OneClassRouter(BaseAgent):
+    """Hybrid Anomaly Engine (IsolationForest and/or LLM Nano).
 
     Workflow
     --------
@@ -42,6 +37,14 @@ class OneClassRouter:
     """
 
     def __init__(self) -> None:
+        cfg = get_settings()
+        provider = get_provider()
+        super().__init__(
+            name="L0_OneClassRouter",
+            model_name=provider.resolve_model("nano"),
+            temperature=cfg.model_temperature,
+        )
+        self._cfg = cfg
         self._scaler: StandardScaler | None = None
         self._iso: IsolationForest | None = None
         self._feature_names: list[str] = []
@@ -51,7 +54,7 @@ class OneClassRouter:
         self._population_means: dict[str, float] = {}
         self._population_stds: dict[str, float] = {}
 
-        logger.info("OneClassRouter initialised (IsolationForest engine)")
+        logger.info("OneClassRouter initialised (Engine: %s)", cfg.l0_engine)
 
     @property
     def is_fitted(self) -> bool:
@@ -173,6 +176,37 @@ class OneClassRouter:
 
         return is_outlier, iso_score, deviating
 
+    def _predict_llm(self, dossier: EntityDossier) -> DetectionMetadata:
+        """Run the nano LLM to check for anomalies."""
+        # Use BaseAgent.analyze via the nano role
+        verdict = self.analyze(dossier)
+        
+        is_anomalous = verdict.prediction == 1
+        return DetectionMetadata(
+            is_anomalous=is_anomalous,
+            confidence=verdict.confidence,
+            detection_type="hybrid" if is_anomalous else "none",
+            report=verdict.reasoning,
+        )
+
+    def _build_prompt(self, dossier: EntityDossier, rag_examples: list[dict] | None = None) -> str:
+        """Construct prompt for L0 LLM analysis."""
+        from prompt_loader import load_prompt
+        import json
+        
+        template = load_prompt("layer0_nano")
+        if not template:
+            # Fallback inline prompt if file missing
+            return f"Anomaly detection for {dossier.entity_id}. Predict 0 or 1."
+
+        return template.format(
+            profile_summary=dossier.get_compact_profile(),
+            features_summary=json.dumps(dossier.get_filtered_features(top_n=8), indent=2),
+            context=dossier.context_data[:1000] if dossier.context_data else "N/A",
+            fp_cost=self._cfg.fp_cost,
+            fn_cost=self._cfg.fn_cost,
+        )
+
     # ── Build DetectionMetadata ─────────────────────────────────────────
 
     def _build_metadata(
@@ -211,16 +245,21 @@ class OneClassRouter:
     ) -> tuple[AgentVerdict | None, float, DetectionMetadata]:
         """Return (AgentVerdict | None, complexity, DetectionMetadata).
 
-        - Inlier  → verdict=0 at zero LLM cost.
-        - Outlier → None (escalate to L1) with math details.
+        - Engine 'isolation' → IsolationForest (fitted training).
+        - Engine 'llm'       → Nano LLM (zero-training).
         """
-        assert self._fitted, "Layer 0 MUST be fitted before prediction!"
-
-        meta = self._build_metadata(entity_id, dossier)
+        engine = self._cfg.l0_engine
+        
+        if engine == "llm":
+            meta = self._predict_llm(dossier)
+        else:
+            # Default IsolationForest
+            assert self._fitted, "Layer 0 MUST be fitted before prediction in 'isolation' mode!"
+            meta = self._build_metadata(entity_id, dossier)
 
         if not meta.is_anomalous:
             return AgentVerdict(
-                agent_name="L0_OneClassRouter",
+                agent_name=self.name,
                 prediction=0,
                 confidence=meta.confidence,
                 reasoning=meta.report,
@@ -228,8 +267,8 @@ class OneClassRouter:
 
         complexity = min(1.0, meta.confidence)
         logger.info(
-            "  L0[%s] OUTLIER → escalating to L1: conf=%.2f, %s",
-            entity_id, meta.confidence, meta.report[:150],
+            "  L0[%s] ANOMALY (%s) → escalating to L1: conf=%.2f, %s",
+            entity_id, engine, meta.confidence, meta.report[:150],
         )
         return None, complexity, meta
 
