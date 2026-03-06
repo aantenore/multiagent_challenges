@@ -236,7 +236,7 @@ class AdaptivePipeline:
         verdicts.append(filter_verdict)
         
         status = "ANOMALOUS" if meta.is_anomalous else "STABLE"
-        logger.info("  [Pillar 1] Entity %s classified as %s (Z=%.2f)", eid, status, meta.confidence * 5.0)
+        logger.info("  [Pillar 1] Entity %s classified as %s (Max Z=%.2f, Threshold=%.1f)", eid, status, meta.max_z_score, self._cfg.filter_z_score_threshold)
 
         # Early exit if stable and confident
         high_conf_stable = (not meta.is_anomalous) and (filter_verdict.confidence > self._cfg.filter_upper_threshold)

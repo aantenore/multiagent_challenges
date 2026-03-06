@@ -43,6 +43,9 @@ class DetectionMetadata(BaseModel):
     report: str = Field(
         default="", description="Human-readable report for subsequent analysis"
     )
+    max_z_score: float = Field(
+        default=0.0, description="Maximum Z-Score observed across the sliding window"
+    )
 
 
 # ── Manifest Schema ─────────────────────────────────────────────────────

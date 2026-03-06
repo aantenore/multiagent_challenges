@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     # ── Mathematical Filter (Pillar 1) ──────────────────────────────────
     filter_upper_threshold: float = 0.85
     filter_skip_enabled: bool = True
+    filter_z_score_threshold: float = 2.0  # Z-Score deviation to trigger anomaly
     fp_cost: float = 3.0
     fn_cost: float = 5.0
 

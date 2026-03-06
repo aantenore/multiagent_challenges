@@ -62,11 +62,15 @@ class MathematicalFilter:
         logger.debug(f"Entity {entity_id} detected frequency: {natural_frequency} days")
 
         # 3. Slide Window & Trigger
-        incident_idx, z_score = self._find_incident_trigger(df, target_col, natural_frequency)
+        incident_idx, max_z = self._find_incident_trigger(df, target_col, natural_frequency)
         
         if incident_idx is None:
-            meta = DetectionMetadata(is_anomalous=False, report="No significant behavioral deviation detected (sub-threshold).")
-            verdict = AgentVerdict(agent_name="Pillar1_Filter", prediction=0, confidence=0.8, reasoning="Sub-threshold z-score")
+            confidence = min(1.0, max(0.5, 1.0 - (max_z / self._cfg.filter_z_score_threshold)))
+            meta = DetectionMetadata(
+                is_anomalous=False, max_z_score=max_z,
+                report=f"No significant deviation detected. Max Z-Score={max_z:.2f} (threshold={self._cfg.filter_z_score_threshold})."
+            )
+            verdict = AgentVerdict(agent_name="Pillar1_Filter", prediction=0, confidence=confidence, reasoning=f"Sub-threshold: max Z={max_z:.2f}")
             return verdict, 1.0, meta
 
         # 4. Crop Incident Window
@@ -74,11 +78,12 @@ class MathematicalFilter:
         start_time = trigger_time - pd.Timedelta(days=self._cfg.filter_incident_lookback_days)
         end_time = df.index[-1] 
 
-        report = f"Anomaly detected in {target_col}. Triggered at {trigger_time.date()} with Z-Score={z_score:.2f}"
+        report = f"Anomaly detected in {target_col}. Triggered at {trigger_time.date()} with Z-Score={max_z:.2f}"
         
         meta = DetectionMetadata(
             is_anomalous=True,
-            confidence=min(1.0, z_score / 5.0), 
+            confidence=min(1.0, max_z / 5.0),
+            max_z_score=max_z,
             detection_type="mathematical_trigger",
             incident_start=str(start_time),
             incident_end=str(end_time),
@@ -94,7 +99,7 @@ class MathematicalFilter:
         
         # Complexity scales with the magnitude of the deviation (Z-Score)
         # We cap it at 1.0 for the Swarm Model but keep the raw score for auditing
-        complexity = min(1.0, max(0.1, z_score / 5.0))
+        complexity = min(1.0, max(0.1, max_z / 5.0))
         
         return verdict, complexity, meta
 
@@ -174,7 +179,7 @@ class MathematicalFilter:
             if z_score > max_z:
                 max_z = z_score
             
-            if z_score > 2.0 and trigger_idx is None:
+            if z_score > self._cfg.filter_z_score_threshold and trigger_idx is None:
                 trigger_idx = i
                 logger.info(
                     "  [Pillar 1] TRIGGER! Value (%.2f) deviates from baseline (Mean:%.2f, Std:%.2f) with Z-Score: %.2f",
