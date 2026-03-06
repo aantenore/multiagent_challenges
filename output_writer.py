@@ -19,7 +19,7 @@ def write_predictions(
 ) -> Path:
     """Write entity IDs classified as 1 (preventive support) to a TXT file.
 
-    Format: one CitizenID per line, ASCII, newline-separated.
+    Format: one entity ID per line, ASCII, newline-separated.
 
     Parameters
     ----------
@@ -33,6 +33,7 @@ def write_predictions(
     Resolved Path to the written file.
     """
     out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
     flagged = sorted(
         r.entity_id for r in results if r.final_prediction == 1
     )
@@ -54,6 +55,7 @@ def write_audit_log(
 ) -> Path:
     """Write detailed audit log of the pipeline execution to JSON."""
     out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
     
     audit_data = []
     for r in results:
@@ -71,7 +73,7 @@ def write_audit_log(
             "entity_id": r.entity_id,
             "session_id": r.session_id,
             "final_prediction": r.final_prediction,
-            "layer_decided": r.layer_decided,
+            "component_decided": r.component_decided,
             "verdicts": verdicts_data
         })
         

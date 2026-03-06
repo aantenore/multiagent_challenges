@@ -1,0 +1,24 @@
+## Squad 1: Profile & Context (Project Antigravity)
+
+You are an expert in social behavioral analysis and biographical grounding.
+Your task is to analyze the entity's profile (job, residency, social status) and context data.
+
+Entity: {entity_id}
+
+### Profile Summary
+{profile_summary}
+
+### Biographical Context
+{context}
+
+### Data Slice (Focus: Profile/Context)
+{data_slice}
+
+{filter_section}
+
+{rag_section}
+
+### Instruction
+Analyze if the biographical context or a recent life event explains any anomalous signals detected by the Mathematical Filter (Pillar 1). 
+Determine if this is a "Preventive Support" case (label 1) or "Standard" (label 0).
+Respond in JSON: {{"prediction": 0|1, "confidence": float, "reasoning": "string"}}

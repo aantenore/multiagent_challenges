@@ -1,69 +1,40 @@
-# 🪞 Mirror: The Infinite Adaptive Triage Engine
+# 🪞 Project Antigravity: The Universal Adaptive Triage Engine
 
-> **"Identity is a variable. Context is the only constant."**
+Project Antigravity is a high-performance, **zero-hardcode**, multi-agent classification framework. It is designed to be perfectly domain-agnostic, treating every industry as a set of abstract analytical roles.
 
-Mirror is a high-performance, **zero-hardcode**, multi-agent classification framework engineered for the Google Deepmind Agentic Challenge 2026. It is designed to be perfectly domain-agnostic, treating every industry—from healthcare to finance—as a set of abstract analytical roles.
+## 🚀 Architectural Pillars
 
----
+1.  **Pillar 1: Mathematical Filter**: High-speed behavioral frequency detection via Autocorrelation (ACF) and dynamic sliding windows.
+2.  **Pillar 2: Memory Store**: Hierarchical RAG (Identity, Contextual, Global) with **Strict Stage Isolation**.
+3.  **Pillar 3: Analytical Squads**: Specialized domain-expert agent swarms (Profile, Spatial, Temporal, Health/Behavioral).
+4.  **Pillar 4: Global Orchestrator**: Final behavioral recovery assessment and economic risk arbitration.
 
-## 🏛️ Architecture: The Hierarchical Sieve
+## 🛠️ Key Features
 
-Mirror minimizes **Critical Regret** (False Negatives) through an asymmetric three-layer filtering process.
+- **N-Stage Continuous Streaming**: Cumulative indexing through infinite data streams with complete memory partitioning.
+- **Domain Agnosticity**: Map any data field (e.g., 'HeartRate', 'TxAmount') to abstract roles in `manifest.json`.
+- **Multi-LLM Native**: Switch seamlessly between Google Gemini and OpenAI models via LangChain integrations.
+- **Deep Observability**: Tracing of internal swarm reasoning, token costs, and API calls via Langfuse.
+- **Economic Decider**: Final decisions are weighted by the cost of False Negatives (FN) vs False Positives (FP).
+- **Asymmetric Intelligence**: Optimized to minimize critical regret in high-stakes classification tasks.
 
-### 1. Layer 0: The Sentry (Statistical Gateway)
-- **Engine**: Hybrid IsolationForest (zero-cost ML) or Nano-LLM (cost-optimized generative).
-- **Dynamic Feature Extraction**: Automatically processes *any* numeric column in *any* manifest role.
-- **Rhythm Discovery**: Uses Autocorrelation (ACF) to synchronize rolling windows with entity-specific cycles, preventing normal fluctuations from triggering alerts.
+## 📁 System Documentation
 
-### 2. Layer 1: The Swarm (Domain Experts)
-- **Expert Coordination**: Dynamically instantiates parallel expert agents for every unique role defined in your manifest.
-- **Consensus Logic**: Weighted voting among experts with distinct personas and temperatures to eliminate stochastic hallucinations.
+For deep dives into the framework, see the [docs/](file:///c:/PROJECTS/multiagent_challenge/docs/) directory:
+- [Theory of Operation](file:///c:/PROJECTS/multiagent_challenge/docs/Theory_of_Operation.md)
+- [Architecture Deep Dive](file:///c:/PROJECTS/multiagent_challenge/docs/Architecture_Deep_Dive.md)
+- [Domain Adaptation Guide](file:///c:/PROJECTS/multiagent_challenge/docs/Domain_Adaptation_Guide.md)
+- [Configuration Matrix](file:///c:/PROJECTS/multiagent_challenge/docs/Configuration_Matrix.md)
 
-### 3. Layer 2: The Auditor (Economic Arbitration)
-- **Weighted Reasoning**: Reconciles expert transcripts using high-reasoning models (Smart-tier).
-- **Cost-Awareness**: Decisions are biased by the `FN_COST` and `FP_COST` ratio, ensuring a rational balance between safety and operation.
-
----
-
-## ⚙️ The Abstraction Pattern: Configuring for Any Domain
-
-Mirror has **Zero Hardcoded Roles**. Every role name is an abstraction:
-
-- **Descriptor Roles** (Defined in `settings.py`):
-  - `profile`: Defines the "Identity" of the entity (e.g., patient record, user profile).
-  - `context`: Defines the "Knowledge Base" (e.g., medical guidelines, fraud manuals).
-- **Analytical Roles** (Defined in `manifest.json`):
-  - Any role name (e.g., `heart_rate`, `tx_logs`, `gps_pings`) automatically triggers a dedicated Swarm Expert and Feature Analysis.
-
----
-
-## 📚 The Book of Mirror: Legendary Documentation
-
-| Volume | Title | Content Focus |
-|--------|-------|---------------|
-| **Vol. I** | [**Theory of Operation**](docs/Theory_of_Operation.md) | Hierarchical triage, ACF theory, and RAG PURGE cycles. |
-| **Vol. II** | [**Domain Adaptation**](docs/Domain_Adaptation_Guide.md) | Morphing Mirror for Fraud, Maintenance, or Clinical use. |
-| **Vol. III**| [**Developer Manual**](docs/Developer_Manual.md) | Pipeline logic, tiering costs, and parallelism. |
-| **Vol. IV** | [**Architecture Deep Dive**](docs/Architecture_Deep_Dive.md) | Dossier construction, swarm mechanics, and state flow. |
-| **Vol. V**  | [**Feature Engineering**](docs/Feature_Engineering_Reference.md) | ACF synchronization math and dynamic namespacing. |
-| **Vol. VI** | [**Configuration Matrix**](docs/Configuration_Matrix.md) | Comprehensive param reference for settings.py and .env. |
-| **Vol. VII**| [**Troubleshooting**](docs/Troubleshooting_Deep_Dive.md) | Langfuse tracing, error state resolution, and tuning. |
-
----
-
-## 🚀 Quick Execution
+## 🏁 Quick Start
 
 ```bash
-# 1. Setup
+# Install dependencies
 pip install -r requirements.txt
+
+# Setup environment (API Keys, Provider, Observability)
 cp .env.example .env
 
-# 2. Production Run
-python main.py -m manifest.json
-
-# 3. Bypass Training (Cold Start)
-python main.py -m bypass_manifest.json --log-level DEBUG
+# Run the pipeline for a specific stage
+python main.py --manifest manifest.json --stage stage_1
 ```
-
----
-*Developed for the Google Deepmind Agentic Challenge 2026.*

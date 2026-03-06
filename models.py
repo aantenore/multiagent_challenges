@@ -1,22 +1,23 @@
 """
-Pydantic data models shared across every layer of the pipeline.
-Every inter-agent exchange is validated through these schemas.
+Pydantic data models shared across every pillar of the pipeline.
+Every inter-pillar exchange is validated through these schemas.
 """
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
-# ── Detection Metadata (Layer 0 → Layer 1 explainability) ──────────────
+# ── Detection Metadata (Mathematical Filter → Analytical Squads) ───────
 
 class DetectionMetadata(BaseModel):
-    """Structured explanation from the L0 One-Class Anomaly Engine.
+    """Structured explanation from the Mathematical Filter (Pillar 1).
 
-    Passed to L1 agents so they know WHY L0 escalated this entity
-    (mathematical anomaly details). L1 acts as Anti-False-Positive filter.
+    Passed to Analytical Squads so they know WHY the entity was flagged
+    (mathematical anomaly details). Squads act as verification/contextual filter.
     """
 
     is_anomalous: bool = Field(
@@ -25,22 +26,22 @@ class DetectionMetadata(BaseModel):
     confidence: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Overall anomaly confidence"
     )
-    forest_flagged: bool = Field(
-        default=False, description="IsolationForest flagged this entity as outlier"
-    )
     detection_type: str = Field(
         default="none",
-        description="'behavioural' or 'none'"
+        description="'mathematical_trigger' or 'none'"
     )
     deviating_features: dict[str, float] = Field(
         default_factory=dict,
         description="Map of feature_name → z-score for features that exceeded threshold"
     )
-    forest_score: float = Field(
-        default=0.0, description="IsolationForest anomaly decision score"
+    incident_start: str | None = Field(
+        default=None, description="Start timestamp of the incident window"
+    )
+    incident_end: str | None = Field(
+        default=None, description="End timestamp of the incident window"
     )
     report: str = Field(
-        default="", description="Human-readable report for L1 agents"
+        default="", description="Human-readable report for subsequent analysis"
     )
 
 
@@ -74,7 +75,7 @@ class Stage(BaseModel):
     accumulates all training data from stage 0..i before evaluating stage i.
     """
 
-    name: str = Field(..., description="Human-readable stage name, e.g. 'level_1'")
+    name: str = Field(..., description="Human-readable stage name, e.g. 'stage_1'")
     training_sources: list[ManifestEntry] = Field(
         default_factory=list, description="Sources used to train on this stage"
     )
@@ -83,7 +84,7 @@ class Stage(BaseModel):
     )
     output_file: str = Field(
         default="",
-        description="Output predictions filename for this stage, e.g. 'predictions_lev1.txt'",
+        description="Output predictions filename for this stage, e.g. 'predictions_stage1.txt'",
     )
 
 
@@ -136,7 +137,7 @@ class EntityDossier(BaseModel):
     )
     features: dict[str, float] = Field(
         default_factory=dict,
-        description="Engineered numeric features (populated by Layer 0)",
+        description="Engineered numeric features (populated by Pillar 1)",
     )
 
     def get_compact_profile(self) -> str:
@@ -182,7 +183,7 @@ class EntityDossier(BaseModel):
 # ── Agent Verdict ───────────────────────────────────────────────────────
 
 class AgentVerdict(BaseModel):
-    """Structured output from any agent (Layer 0 / 1 / 2)."""
+    """Structured output from any pillar (Pillar 1 / 3 / 4)."""
 
     agent_name: str = Field(..., description="Name of the emitting agent")
     prediction: int = Field(
@@ -205,7 +206,9 @@ class SwarmConsensus(AgentVerdict):
     can weigh the consensus strength of each role's swarm.
     """
 
-    role: str = Field(..., description="The data role this consensus covers")
+    squad: str = Field(..., description="The functional squad this consensus covers")
+    window_start: str | None = None
+    window_end: str | None = None
     n_agents: int = Field(
         default=1, ge=1, description="Number of agents that voted"
     )
@@ -214,8 +217,8 @@ class SwarmConsensus(AgentVerdict):
         description="Fraction of agents that agree with the majority prediction",
     )
     complexity_score: float = Field(
-        default=0.0, ge=0.0, le=1.0,
-        description="Assessed complexity for this role (0=trivial, 1=maximally ambiguous)",
+        default=0.0, ge=0.0,
+        description="Assessed complexity for this role (scales with anomaly magnitude)",
     )
     individual_verdicts: list[AgentVerdict] = Field(
         default_factory=list,
@@ -235,10 +238,10 @@ class PipelineResult(BaseModel):
     final_prediction: int = Field(
         ..., ge=0, le=1, description="Final binary label"
     )
-    layer_decided: str = Field(
-        ..., description="Which layer emitted the final decision"
+    component_decided: str = Field(
+        ..., description="Which system component emitted the final decision"
     )
     verdicts: list[AgentVerdict] = Field(
         default_factory=list,
-        description="Ordered trail of per-agent verdicts",
+        description="Ordered trail of per-agent verdicts"
     )

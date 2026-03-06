@@ -22,10 +22,7 @@ logger = logging.getLogger(__name__)
 class SlidingWindowExtractor:
     """Extract trend features over configurable sliding windows.
 
-    For each numeric column in the domain data it computes:
-    - mean, std, min, max
-    - delta  (last - first)
-    - velocity (delta / window_span_days)
+    For each numeric column in the domain data it computes statistical metrics.
     """
 
     def __init__(self, window_size: int | None = None) -> None:
@@ -38,7 +35,6 @@ class SlidingWindowExtractor:
         features: dict[str, float] = {}
 
         # --- Dynamic Domain features ---
-        # Automatically process every role in domain_data (temporal, spatial, or custom)
         for role, rows in dossier.domain_data.items():
             if rows:
                 features.update(self._extract_generic_features(role, rows))
@@ -51,116 +47,123 @@ class SlidingWindowExtractor:
 
     # ── Temporal ────────────────────────────────────────────────────────
 
-    # --- Abstract Analytics ---
+    def get_optimal_windows(self, dossier: EntityDossier) -> dict[str, int]:
+        """Determine optimal windows for the specialized analytical squads."""
+        cfg = get_settings()
+        ts_col = cfg.timestamp_col
+        all_numeric_series = []
+        
+        for rows in dossier.domain_data.values():
+            if not rows: continue
+            df = pd.DataFrame(rows)
+            if ts_col in df.columns:
+                df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce").dropna()
+                df = df.sort_values(ts_col)
+                numeric_df = df.select_dtypes(include=[np.number])
+                for col in numeric_df.columns:
+                    if col not in cfg.feature_ignore_columns:
+                        all_numeric_series.append(df[col])
+
+        # Default fallback windows (mapped to squad config keys)
+        windows = {
+            "profile_context": 3,
+            "spatial_patterns": 7,
+            "temporal_routines": 30,
+            "health_behavioral": 90
+        }
+
+        if not all_numeric_series:
+            return windows
+
+        try:
+            consensus_lags = []
+            for s in all_numeric_series:
+                if len(s) < 10: continue
+                # Resample to daily if possible
+                s_daily = s.resample('1D').mean().ffill() if hasattr(s.index, 'freq') else s
+                lags = min(cfg.autocorr_max_lag, len(s_daily) - 1)
+                if lags < 2: continue
+                acf_vals = acf(s_daily, nlags=lags, fft=True)
+                if len(acf_vals) > 1:
+                    peak = int(np.argmax(acf_vals[1:])) + 1
+                    consensus_lags.append(peak)
+            
+            if consensus_lags:
+                median_lag = int(np.median(consensus_lags))
+                windows["profile_context"] = max(1, median_lag // 2)
+                windows["spatial_patterns"] = max(7, median_lag)
+                windows["temporal_routines"] = max(30, median_lag * 2)
+                windows["health_behavioral"] = max(2, median_lag // 4)
+        except Exception as e:
+            logger.warning(f"Consensus ACF failed: {e}. Using fallback windows.")
+
+        return windows
+
+    def extract_window(self, dossier: EntityDossier, squad: str, window_days: int, end_time: pd.Timestamp) -> dict[str, float]:
+        """Extract features for a specific squad within a given time window."""
+        start_time = end_time - pd.Timedelta(days=window_days)
+        sliced_dossier = self._slice_dossier(dossier, start_time, end_time)
+        
+        feats = self.extract(sliced_dossier)
+        return {f"{squad}_{k}": v for k, v in feats.items()}
+
+    def _slice_dossier(self, dossier: EntityDossier, start: pd.Timestamp, end: pd.Timestamp) -> EntityDossier:
+        """Return a slice of the dossier between start and end timestamps."""
+        cfg = get_settings()
+        ts_col = cfg.timestamp_col
+        new_domain_data = {}
+        for role, rows in dossier.domain_data.items():
+            if not rows:
+                new_domain_data[role] = []
+                continue
+            df = pd.DataFrame(rows)
+            if ts_col in df.columns:
+                df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
+                mask = (df[ts_col] >= start) & (df[ts_col] <= end)
+                new_domain_data[role] = df.loc[mask].to_dict(orient="records")
+            else:
+                new_domain_data[role] = rows
+        
+        return EntityDossier(
+            entity_id=dossier.entity_id,
+            domain_data=new_domain_data,
+            profile_data=dossier.profile_data,
+            context_data=dossier.context_data
+        )
 
     def _extract_generic_features(self, role: str, rows: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute per-column window stats + trend features for ANY role."""
-        feats: dict[str, float] = {}
-        if not rows:
-            return feats
-
-        # Convert to DataFrame
+        """Compute basic stats for any numeric columns in any domain role."""
         df = pd.DataFrame(rows)
-        feats["n_events"] = float(len(df))
-        
-        # Ensure Timestamp is properly converted and set as index
-        if "Timestamp" in df.columns:
-            df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
-            df = df.dropna(subset=["Timestamp"])
-            df = df.sort_values(by="Timestamp").set_index("Timestamp")
-        else:
-            return feats
+        numeric_df = df.select_dtypes(include=[np.number])
+        feats: dict[str, float] = {}
 
-        # Auto-detect numeric columns (excluding IDs and ignored columns)
+        for col in numeric_df.columns:
+            if col in get_settings().feature_ignore_columns: continue
+            
+            series = numeric_df[col].dropna()
+            if series.empty: continue
+
+            prefix = f"{role}_{col}"
+            feats[f"{prefix}_mean"] = float(series.mean())
+            feats[f"{prefix}_std"] = float(series.std()) if len(series) > 1 else 0.0
+            feats[f"{prefix}_max"] = float(series.max())
+            feats[f"{prefix}_delta"] = float(series.iloc[-1] - series.iloc[0])
+
+        # Spatial features: only if columns are mapped in settings
         cfg = get_settings()
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        cols_to_process = [c for c in numeric_cols if c not in cfg.feature_ignore_columns]
-
-        # Per-numeric-column sliding window
-        for col in cols_to_process:
-            series = df[col].dropna().astype(float)
-            if series.empty:
-                continue
-
-            feats[f"{role}_{col}_mean"] = float(series.mean())
-            feats[f"{role}_{col}_std"] = float(series.std()) if len(series) > 1 else 0.0
-            feats[f"{role}_{col}_min"] = float(series.min())
-            feats[f"{role}_{col}_max"] = float(series.max())
-            feats[f"{role}_{col}_delta"] = float(series.iloc[-1] - series.iloc[0])
-
-            # Full-series first-to-last delta
-            feats[f"{role}_{col}_total_delta"] = feats[f"{role}_{col}_delta"]
-
-            # Velocity: delta over time span (in days)
-            timespan_days = (series.index[-1] - series.index[0]).total_seconds() / 86400.0
-            if timespan_days > 0:
-                feats[f"{role}_{col}_velocity"] = feats[f"{role}_{col}_delta"] / timespan_days
-            else:
-                feats[f"{role}_{col}_velocity"] = 0.0
-
-            # ── Moving Averages (True time-based windows) ──
-            if not series.empty:
-                # Primary window
-                roll3 = series.rolling(cfg.default_window_ma3).mean()
-                ma3 = float(roll3.iloc[-1])
-                feats[f"{role}_{col}_ma3"] = ma3
-                feats[f"{role}_{col}_ma3_deviation"] = float(series.iloc[-1] - ma3)
-                
-                # Secondary window
-                roll7 = series.rolling(cfg.default_window_ma7).mean()
-                ma7 = float(roll7.iloc[-1])
-                feats[f"{role}_{col}_ma7"] = ma7
-                feats[f"{role}_{col}_ma7_deviation"] = float(series.iloc[-1] - ma7)
-
-            # ── Linear Slope / Trend ──
-                x = (series.index - series.index[0]).total_seconds() / 86400.0
-                slope = float(np.polyfit(x, series.values, 1)[0])
-                feats[f"{role}_{col}_slope"] = slope
-
-            # ── Dynamic Sizing via ACF (Autocorrelation) ──
-            # Re-sample smoothly to daily frequency to calculate ACF reliably if we have enough span
-            if len(series) >= 5 and timespan_days > 2:
-                # Resample to daily frequency (mean) and forward-fill missing
-                daily_series = series.resample('1D').mean().ffill()
-                if len(daily_series) >= 5:
-                    # nlags defaults to min(10, len(daily_series) - 1)
-                    nlags = min(15, len(daily_series) - 1)
-                    try:
-                        acf_vals = acf(daily_series, nlags=nlags, fft=True)
-                        # Find highest peak ignoring lag 0
-                        if len(acf_vals) > 1:
-                            best_lag = int(np.argmax(acf_vals[1:])) + 1
-                            optimal_days = best_lag
-                            logger.debug(f"[{col}] ACF found optimal lag: {optimal_days} days (from {len(daily_series)} daily samples)")
-                        else:
-                            optimal_days = self._ws
-                            logger.debug(f"[{col}] ACF failed to find peak, fallback to default window: {self._ws} days")
-                    except Exception as e:
-                        logger.warning(f"ACF failed for {col}: {e}")
-                        optimal_days = self._ws
-                else:
-                    optimal_days = self._ws
-                    logger.debug(f"[{col}] Not enough daily samples for ACF ({len(daily_series)}), fallback to default: {self._ws} days")
-            else:
-                optimal_days = self._ws
-                logger.debug(f"[{col}] Series too short or narrow for ACF (len={len(series)}, span={timespan_days:.1f}d), fallback: {self._ws} days")
-                
-            # Compute dynamic features based on optimal lag
-            feats[f"{col}_optimal_lag_days"] = float(optimal_days)
-            roll_dynamic = series.rolling(f"{int(optimal_days)}D").mean()
-            dyn_mean = float(roll_dynamic.iloc[-1])
-            feats[f"{col}_dynamic_mean"] = dyn_mean
-            feats[f"{col}_dynamic_deviation"] = float(series.iloc[-1] - dyn_mean)
+        coord_cols = cfg.spatial_coordinate_cols
+        if len(coord_cols) == 2:
+            lat_col, lng_col = coord_cols
+            if lat_col in df.columns and lng_col in df.columns:
+                feats.update(self._spatial_features(rows, lat_col, lng_col))
 
         return feats
 
-    # ── Specialized Geometric Extras ────────────────────────────────────
-
-    def _spatial_features(self, rows: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute generic mobility metrics if lat/lng are present."""
+    def _spatial_features(self, rows: list[dict[str, Any]], lat_col: str = "lat", lng_col: str = "lng") -> dict[str, float]:
+        """Compute generic mobility metrics from configurable coordinate columns."""
         feats: dict[str, float] = {}
-        lats = [float(r.get("lat", 0)) for r in rows if "lat" in r]
-        lngs = [float(r.get("lng", 0)) for r in rows if "lng" in r]
+        lats = [float(r.get(lat_col, 0)) for r in rows if lat_col in r]
+        lngs = [float(r.get(lng_col, 0)) for r in rows if lng_col in r]
 
         if not lats: return feats
 
@@ -168,15 +171,12 @@ class SlidingWindowExtractor:
         feats["lat_std"] = float(np.std(lats))
         feats["lng_std"] = float(np.std(lngs))
 
-        # Approx mobility radius (std of distance from centroid in km)
+        # Approx mobility radius
         clat, clng = np.mean(lats), np.mean(lngs)
         dists = [self._haversine(clat, clng, la, lo) for la, lo in zip(lats, lngs)]
-        feats["mobility_radius_km"] = float(np.std(dists))
-        feats["max_dist_from_home_km"] = float(max(dists)) if dists else 0.0
+        feats["mobility_radius_km"] = float(np.std(dists)) if dists else 0.0
 
         return feats
-
-    # ── Profile ─────────────────────────────────────────────────────────
 
     def _profile_features(self, profile: dict[str, Any], prefix: str = "") -> dict[str, float]:
         """Recursively extract all numeric features from any profile structure."""
@@ -188,8 +188,6 @@ class SlidingWindowExtractor:
             elif isinstance(v, dict):
                 feats.update(self._profile_features(v, prefix=key))
         return feats
-
-    # ── Utils ───────────────────────────────────────────────────────────
 
     @staticmethod
     def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:

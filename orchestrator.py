@@ -19,119 +19,121 @@ logger = logging.getLogger(__name__)
 
 
 class GlobalOrchestrator(BaseAgent):
-    """Smart-model agent that weighs swarm consensus verdicts economically."""
+    """Pillar 4 — Chronic vs. Acute Judge (Project Antigravity).
+
+    Directive: Evaluate "Recovery". 
+    - If sliding window shows return to normal → 0 (Acute/Transient).
+    - If sustained or accelerating → 1 (Chronic/Intervention).
+    """
 
     def __init__(self) -> None:
         cfg = get_settings()
         provider = get_provider()
         super().__init__(
-            name="L2_GlobalOrchestrator",
+            name="GlobalOrchestrator",
             model_name=provider.resolve_model("smart"),
             temperature=cfg.model_temperature,
         )
-        self._fp_cost = cfg.fp_cost
-        self._fn_cost = cfg.fn_cost
+        self._cfg = cfg
 
     def decide(
         self,
         dossier: EntityDossier,
-        swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict],
+        swarm_verdicts: list[SwarmConsensus],
         rag_examples: list[dict] | None = None,
     ) -> AgentVerdict:
-        """
-        Synthesize swarm consensus, historical RAG memory, and raw profile data 
-        into a final economic decision.
-        """
-        logger.info("  [L2] Orchestrating final decision for entity %s...", dossier.entity_id)
-        return self.analyze(dossier, rag_examples, _swarm_verdicts=swarm_verdicts)
+        """Synthesize squad findings with a focus on recovery trends."""
+        if not self._cfg.pillar_orchestrator_enabled:
+            logger.info("  [Pillar 4] Orchestrator disabled. Emitting weighted consensus.")
+            return self._fallback_consensus(swarm_verdicts)
+            
+        logger.info(
+            "  [Pillar 4] Analyzing %d squad verdicts vs. %d memory precedents for final adjudication...",
+            len(swarm_verdicts), len(rag_examples or [])
+        )
+        verdict = self.analyze(dossier, rag_examples, _swarm_verdicts=swarm_verdicts)
+        
+        logger.info(
+            "  [Decision] Final Verdict: %d (Confidence: %.2f) | Reasoning: %s",
+            verdict.prediction, verdict.confidence, verdict.reasoning
+        )
+        return verdict
 
-    def analyze(  # type: ignore[override]
-        self,
-        dossier: EntityDossier,
-        rag_examples: list[dict] | None = None,
-        *,
-        _swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict] | None = None,
-    ) -> AgentVerdict:
-        """
-        Specialized analysis for L2: inject swarm results into the prompt state
-        before calling the LLM provider.
-        """
+    def _fallback_consensus(self, verdicts: list[SwarmConsensus]) -> AgentVerdict:
+        """Simple mathematical fallback if Orchestrator LLM is disabled."""
+        if not verdicts: return AgentVerdict(agent_name="Orchestrator_Fallback", prediction=0, confidence=0.5, reasoning="No squads.")
+        avg_v = sum(v.prediction * v.confidence for v in verdicts) / (sum(v.confidence for v in verdicts) + 1e-9)
+        pred = 1 if avg_v >= 0.5 else 0
+        return AgentVerdict(agent_name="Orchestrator_Fallback", prediction=pred, confidence=0.7, reasoning="Weighted squad consensus.")
+
+    def analyze(self, dossier: EntityDossier, rag_examples: list[dict] | None = None, *, _swarm_verdicts: list[SwarmConsensus] | None = None) -> AgentVerdict:
+        """Execute the orchestrator's analysis logic over the provided dossier and underlying swarm verdicts."""
         self._pending_swarm = _swarm_verdicts or []
         return super().analyze(dossier, rag_examples)
 
-    def _build_prompt(
-        self,
-        dossier: EntityDossier,
-        rag_examples: list[dict],
-    ) -> str:
-        """
-        Construct the Global Orchestrator prompt.
-        Includes an economic framework (FP vs FN costs) to bridge the gap 
-        between AI prediction and business risk.
-        """
-        swarm = self._pending_swarm
-
-        # Format verdicts — inclusion of role consensus metrics (agreement/complexity)
-        verdict_lines = self._format_verdicts(swarm)
-
-        rag_section = ""
-        if rag_examples:
-            cases = "\n".join(
-                f"  Case: predicted={ex.get('predicted_label')} — {ex.get('summary', '')}"
-                for ex in rag_examples
-            )
-            rag_section = f"### Historical Memory — Similar Scenarios\n{cases}\n\n"
-
-        # Load external template for standardized reasoning
+    def _build_prompt(self, dossier: EntityDossier, rag_examples: list[dict]) -> str:
+        """Build the orchestrator's specific prompt by synthesizing swarm verdicts and data trends."""
+        verdict_lines = self._format_verdicts(self._pending_swarm)
+        
+        # Recovery context: highlight the most recent trend in features
+        trend_summary = self._extract_trend_context(dossier)
+        
         template = load_prompt("orchestrator")
-        if template:
-            return template.format(
-                entity_id=dossier.entity_id,
-                verdict_lines=verdict_lines,
-                profile_summary=dossier.get_compact_profile(),
-                context=dossier.context_data[:1500] if dossier.context_data else "N/A",
-                features_summary=json.dumps(dossier.get_filtered_features(top_n=12), indent=2),
-                rag_section=rag_section,
-                fp_cost=self._fp_cost,
-                fn_cost=self._fn_cost,
-                fn_ratio=self._fn_cost / self._fp_cost,
-            )
-
-        # Inline fallback — Chief Economic Orchestrator
-        return (
-            f"## Case Triage — Global Orchestration for '{dossier.entity_id}'\n\n"
-            f"You are the senior decision maker. Your goal is to review findings from "
-            f"multiple domain-specific swarms and issue a final 'Preventive Support' verdict.\n\n"
-            f"### Domain Expert Verdicts\n{verdict_lines}\n\n"
-            f"### Entity Profile & Identity\n"
-            f"```json\n{json.dumps(dossier.profile_data, default=str, indent=2)}\n```\n\n"
-            f"### Biographic Context\n{dossier.context_data[:2000] if dossier.context_data else 'N/A'}\n\n"
-            f"### Statistical Indicators (L0 Extraction)\n"
-            f"```json\n{json.dumps(dossier.features, indent=2)}\n```\n\n"
-            f"{rag_section}"
-            f"### Decision Framework — Economic Trade-offs\n"
-            f"- False Positive Cost (FP): {self._fp_cost}\n"
-            f"- False Negative Cost (FN): {self._fn_cost}\n"
-            f"- Risk Bias: Missing a case (FN) is {self._fn_cost / self._fp_cost}x more impactful.\n\n"
-            f"Respond with JSON format: "
-            f'{{{{"prediction": 0|1, "confidence": float, "reasoning": "string"}}}}'
+        
+        return template.format(
+            entity_id=dossier.entity_id,
+            verdict_lines=verdict_lines,
+            trend_summary=trend_summary,
+            profile_summary=dossier.get_compact_profile(),
+            context=dossier.context_data[:1000] if dossier.context_data else "N/A",
+            rag_section=self._format_rag(rag_examples),
+            fp_cost=self._cfg.fp_cost,
+            fn_cost=self._cfg.fn_cost,
         )
 
+    def _extract_trend_context(self, dossier: EntityDossier) -> str:
+        """Heuristic to describe if data is recovering or declining based on filter pillars."""
+        # Use primary filter column if available for trend analysis
+        target_col = self._cfg.filter_primary_col
+        
+        # Find which domain data list contains this column
+        series_data = []
+        for role_list in dossier.domain_data.values():
+            if role_list and target_col in role_list[0]:
+                series_data = role_list
+                break
+        
+        if len(series_data) < 5: return "Stable (Insufficient history)"
+        
+        vals = [float(row.get(target_col, 0)) for row in series_data if target_col in row]
+        if len(vals) < 5: return "Stable (No index found)"
+        
+        recent = sum(vals[-2:]) / 2
+        older = sum(vals[-5:-2]) / 3
+        
+        if recent > older * 1.1: return "RECOVERING (Trending upwards)"
+        if recent < older * 0.8: return "DECLINING (Sustained drop)"
+        return "STABLE / TRANSIENT"
+
     @staticmethod
-    def _format_verdicts(verdicts: list) -> str:
-        """Format verdicts with consensus info when available."""
+    def _format_rag(examples: list[dict]) -> str:
+        """Format contextual memory examples into a markdown string specifically for the Orchestrator."""
+        if not examples: return ""
+        lines = ["### Contextual Memory (RAG)\n"]
+        for ex in examples:
+            scope = ex.get("scope", "global").upper()
+            lines.append(f"- [{scope}] Case ID: {ex.get('entity_id')} | Label: {ex.get('label')} | Summary: {ex.get('summary')}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_verdicts(verdicts: list[SwarmConsensus]) -> str:
+        """Format the swarm consensus verdicts into a markdown bulleted list."""
         lines = []
         for v in verdicts:
-            if isinstance(v, SwarmConsensus):
-                lines.append(
-                    f"- **{v.role.title()} Consensus** (N={v.n_agents}): "
-                    f"prediction={v.prediction}, agreement={v.agreement_ratio:.0%}, "
-                    f"confidence={v.confidence:.2f}, complexity={v.complexity_score:.2f}\n"
-                    f"  Reasoning: {v.reasoning}"
-                )
-            else:
-                lines.append(
-                    f"- **{v.agent_name}**: prediction={v.prediction}, "
-                    f"confidence={v.confidence:.2f}, reasoning={v.reasoning}"
-                )
+            lines.append(
+                f"- **{v.squad.replace('_', ' ').title()} Squad**: "
+                f"prediction={v.prediction}, agreement={v.agreement_ratio:.0%}, "
+                f"confidence={v.confidence:.2f}\n"
+                f"  Reasoning: {v.reasoning}"
+            )
         return "\n".join(lines)

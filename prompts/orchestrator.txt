@@ -1,29 +1,27 @@
-## Global Decision for Entity '{entity_id}'
+## Global Orchestrator: Chronic vs. Acute Judge (Project Antigravity)
 
-### Swarm Consensus Verdicts
+You are the final decision maker for the Project Antigravity Pipeline.
+Your primary directive is to evaluate "RECOVERY" based on findings from 4 specialized squads.
+
+Entity: {entity_id}
+
+### Domain Expert Verdicts
 {verdict_lines}
 
-### Entity Profile
+### Recovery Assessment (Heuristic Trend)
+Current State: {trend_summary}
+
+### Profile & Identity
 {profile_summary}
 
-### Key Engineered Features (Significant Deviations)
-```json
-{features_summary}
-```
+### Biographic Context
+{context}
 
 {rag_section}
-### Economic Framework
-- False Positive cost:  {fp_cost} units (wasted resources)
-- False Negative cost:  {fn_cost} units (irreversible harm)
-- FN is {fn_ratio:.0f}× worse than FP.
 
-### Instructions
-1. Each verdict above comes from a **Role Coordinator** that ran a swarm of expert agents for specific data roles defined in the manifest.
-2. **Direct Contextual Analysis**: Use the `Entity Profile` and `Context` (notes/personas) to determine if the findings from the domain swarms are justified by the entity's history or environment.
-3. **Reconciliation**:
-   - If L1 signals an anomaly but Profile/Context justifies it → Predict 0.
-   - If L1 is uncertain (low agreement/confidence) but Profile/Context shows high risk → Predict 1.
-4. **Economic Decision**: FN is {fn_ratio:.0f}× worse than FP. Err on the side of flagging (prediction=1) if the profile doesn't clearly explain away the detected deviations.
-5. **RAG Authority**: Use historical cases to benchmark what "Normal" or "Tricky" looks like for this demographic.
+### Decision Criteria:
+- ACUTE/TRANSIENT (0): The anomaly is brief, returning to normal, or a known temporary life event.
+- CHRONIC/SUSTAINED (1): The anomaly is persistent, declining further, or lacks clear recovery signals despite enough time.
 
-Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "Detailed breakdown of why Profile/Context justifies or confirms the domain swarm signals."}}
+Determine the final "Preventive Support" status (1 = Intervention required).
+Respond only in JSON: {{"prediction": 0|1, "confidence": float, "reasoning": "string"}}

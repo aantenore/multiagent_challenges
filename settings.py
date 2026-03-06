@@ -1,12 +1,6 @@
-"""
-Centralized configuration via Pydantic Settings.
-Reads from .env file with sensible defaults for all parameters.
-"""
-
-from __future__ import annotations
-
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, Annotated, Dict, List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +34,7 @@ class Settings(BaseSettings):
     
     model_temperature: float = 0.1
     max_agent_retries: int = 3
+    pipeline_max_workers: int = 4
 
     # ── Langfuse Observability ──────────────────────────────────────────
     langfuse_public_key: str = ""
@@ -47,24 +42,40 @@ class Settings(BaseSettings):
     langfuse_host: str = "https://cloud.langfuse.com"
     team_name: str = "A(CC)I-Tua"
 
-    # ── Pipeline Hyperparameters ────────────────────────────────────────
-    l0_lower_threshold: float = 0.15
-    l0_upper_threshold: float = 0.85
+    # ── Mathematical Filter (Pillar 1) ──────────────────────────────────
+    filter_upper_threshold: float = 0.85
+    filter_skip_enabled: bool = True
     fp_cost: float = 3.0
     fn_cost: float = 5.0
 
-    # ── Layer 0 Engine ──────────────────────────────────────────────────
-    # "isolation" (IsolationForest, zero-cost) 
-    # "llm" (Nano model, very cheap)
-    l0_engine: str = "llm"
-    bypass_l0: bool = False
+    # ── Project Antigravity Pillars ─────────────────────────────────────
+    pillar_filter_enabled: bool = True       # Pillar 1
+    pillar_memory_enabled: bool = True       # Pillar 2
+    pillar_squads_enabled: bool = True       # Pillar 3
+    pillar_orchestrator_enabled: bool = True # Pillar 4
+    
+    # ── Mathematical Filter Settings ────────────────────────────────────
+    filter_primary_col: str = "BehavioralIndex"
+    filter_secondary_col: str = "TrendIndex"
+    filter_baseline_min_days: int = 14
+    filter_incident_lookback_days: int = 3
 
     # ── Role Names (Configurable Abstractions) ──────────────────────────
     profile_role: str = "profile"
     context_role: str = "context"
+    timestamp_col: str = "Timestamp"
+
+    # ── Token Compression ────────────────────────────────────────────────
+    token_compression_enabled: bool = True
+    acronym_map: Dict[str, str] = {}  # Explicit column→acronym overrides
+    spatial_coordinate_cols: List[str] = []  # e.g. ["lat", "lng"] — set via manifest
+    persona_dense_prefixes: List[str] = [  # Lines starting with these are kept
+        "Mobility", "Daily routine", "Work pattern",
+        "Risk factor", "Living situation", "Financial",
+    ]
 
     # ── Feature Engineering Configuration ───────────────────────────────
-    feature_ignore_columns: list[str] = [
+    feature_ignore_columns: List[str] = [
         "CitizenID", "EventID", "user_id", "_user_id", 
         "Timestamp", "id", "ID", "entity_id"
     ]
@@ -76,38 +87,58 @@ class Settings(BaseSettings):
     swarm_max_agents: int = 5
     swarm_complexity_threshold: float = 0.2
     swarm_temp_spread: float = 0.5
+    swarm_skip_threshold: float = 0.9  # Min confidence to skip Pillar 4 if unanimous
+    swarm_skip_enabled: bool = True
 
-    # ── RAG Configuration ───────────────────────────────────────────────
-    rag_collection_name: str = "case_memory"
+    # ── Squad Configuration ──────────────────────────────────────────────
+    squad_base_agents: int = 1
+    squad_dataset_scaling_factor: float = 0.005  # n_agents += int(dataset_size * factor)
+    autocorr_max_lag: int = 30
+    
+    # Unified Squad Registry: Rules (roles), Prompts, and Scaling
+    squad_configs: Dict[str, Dict[str, Any]] = {
+        "profile_context": {
+            "roles": ["profile", "context"],
+            "prompt": "squad_profile_context",
+            "base_agents": 1,
+        },
+        "spatial_patterns": {
+            "roles": ["spatial"],
+            "prompt": "squad_spatial_patterns",
+            "base_agents": 1,
+        },
+        "temporal_routines": {
+            "roles": ["temporal"],
+            "prompt": "squad_temporal_routines",
+            "base_agents": 1,
+        },
+        "health_behavioral": {
+            "roles": ["activity", "health", "sleep", "pharmacy", "hospital"],
+            "prompt": "squad_health_behavioral",
+            "base_agents": 1,
+        }
+    }
+    
+    # ── RAG Hierarchy ───────────────────────────────────────────────────
+    rag_individual_collection: str = "individual_memory"
+    rag_geo_collection: str = "geo_local_memory"
+    rag_global_collection: str = "global_architectural_memory"
     top_k_rag: int = 3
     rag_db_path: str = "./chroma_db"
 
     # ── Validators ──────────────────────────────────────────────────────
-    @field_validator("l0_upper_threshold")
+    @field_validator("filter_upper_threshold")
     @classmethod
     def _upper_gt_zero(cls, v: float) -> float:
+        """Validate that the upper mathematical filter threshold is between 0 and 1."""
         if not (0.0 < v < 1.0):
-            raise ValueError("l0_upper_threshold must be in (0, 1)")
+            raise ValueError("filter_upper_threshold must be in (0, 1)")
         return v
-
-    @field_validator("l0_lower_threshold")
-    @classmethod
-    def _lower_gt_zero(cls, v: float) -> float:
-        if not (0.0 < v < 1.0):
-            raise ValueError("l0_lower_threshold must be in (0, 1)")
-        return v
-
-    def validate_thresholds(self) -> None:
-        """Cross-field validation: lower must be < upper."""
-        if self.l0_lower_threshold >= self.l0_upper_threshold:
-            raise ValueError(
-                f"l0_lower_threshold ({self.l0_lower_threshold}) "
-                f"must be < l0_upper_threshold ({self.l0_upper_threshold})"
-            )
 
     # ── Derived helpers ─────────────────────────────────────────────────
     @property
     def rag_db_dir(self) -> Path:
+        """Return the configured directory path for the Chroma vector database as a Path object."""
         return Path(self.rag_db_path)
 
 
@@ -115,5 +146,4 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Singleton accessor for Settings."""
     settings = Settings()
-    settings.validate_thresholds()
     return settings

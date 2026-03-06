@@ -1,36 +1,28 @@
-# 📒 The Book of Mirror: Volume VII — Deep Troubleshooting & Observability
+# 📒 Project Antigravity: Volume VII — Deep Troubleshooting & Observability
 
-This volume is for Site Reliability Engineers (SREs) and Architects maintaining the Mirror pipeline.
+This volume is for engineers and architects maintaining the Project Antigravity pipeline.
 
-## 1. Observability Stack: Langfuse
+## 1. Observability Stack
 
-Mirror integrates deeply with **Langfuse** for trace-based debugging.
+The system integrates with **Langfuse** for trace-based debugging.
+- **Trace Context**: Every decision is grouped by `session_id`.
+- **Granularity**: Traces include Pillar 1 scores, Pillar 3 Swarm Expert monologues, and Pillar 4 final arbitration.
 
-### 1.1 Trace ID Resolution
-Every Run generates a unique `Run ID` (format: `run_YYYYMMDD_HHMMSS`).
-- In Langfuse, search for `session_id == Run ID` to see the complete tree of calls.
-- **Traces include**: L0 scores, Swarm Expert monologues, and the final Level 2 arbitration reasoning.
+## 2. Common Scenarios
 
-## 2. Common Error States
+### 2.1 Low Recall (Too many False Negatives)
+- **Fix**: Increase `fn_cost` in `settings.py` or `.env`. This forces the Pillar 4 judge to be more risk-averse.
+- **Fix**: Check `analytical_squads.py` prompts to ensure they emphasize sensitivity over specificity.
 
-### 2.1 `NameError: name 'cfg' is not defined`
-- **Cause**: Refactoring of a static method to a domain-agnostic pattern without injecting the settings singleton.
-- **Fix**: Ensure `cfg = get_settings()` is called inside the method scope or passed as an argument.
+### 2.2 Memory Drift
+- **Fix**: If similar cases are being missed, ensure `pillar_memory_enabled` is True and check RAG query logs for relevant retrieval.
 
-### 2.2 `AttributeError: object has no attribute 'spatial_data'`
-- **Cause**: Legacy code (Medical Domain) attempting to access hardcoded fields on the new `EntityDossier`.
-- **Fix**: Use `dossier.domain_data.get('your_role')` or `get_settings().profile_role`.
+### 2.3 Performance Bottlenecks
+- **Fix**: Reduce `swarm_max_agents` or adjust the `squad_scaling_factor` in `settings.py`.
+- **Fix**: Use a faster model for Pillar 3 (e.g., `gemini-3-flash-preview`).
 
-### 2.3 RAG Connection Failures
-- **Cause**: Concurrent access to ChromaDB or corrupted index.
-- **Fix**: Wipe the `./chroma_db` directory. Mirror will automatically rebuild it from the current stage data.
+## 3. Terminal Diagnostics
 
-## 3. Performance Tuning
-
-If the pipeline is slow:
-1.  **Reduce `max_workers`** in `pipeline.py` if hitting Rate Limits.
-2.  **Increase `l0_upper_threshold`** to allow more cases to be filtered mathematically at Level 0.
-3.  **Use `bypass_l0=True`** only for local unit testing of LLM logic.
-
----
-*Developed for the Google Deepmind Agentic Challenge 2026. This concludes the primary documentation suite.*
+Standard logs are saved per run:
+- `./runs/run_<timestamp>/logs/actions.log`: High-level narrative of the pipeline execution.
+- `./runs/run_<timestamp>/logs/troubleshooting.log`: Deep audit trail including JSON payloads and raw scores.

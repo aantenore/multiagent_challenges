@@ -62,10 +62,12 @@ def load_file(entry: ManifestEntry, base_dir: Path) -> pd.DataFrame:
 
 
 def _load_csv(path: Path) -> pd.DataFrame:
+    """Load a CSV file into a pandas DataFrame."""
     return pd.read_csv(path, encoding="utf-8")
 
 
 def _load_json(path: Path) -> pd.DataFrame:
+    """Load and normalize a JSON file into a pandas DataFrame."""
     raw = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(raw, list):
         return pd.json_normalize(raw, sep="_")

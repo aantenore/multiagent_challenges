@@ -1,5 +1,5 @@
 """
-CLI entry point for the Mirror Pipeline.
+CLI entry point for the Project Antigravity Pipeline.
 
 Usage:
     python main.py -m manifest.json
@@ -20,8 +20,9 @@ from rich.logging import RichHandler
 
 
 def main() -> None:
+    """Main entry point for the Antigravity pipeline CLI."""
     parser = argparse.ArgumentParser(
-        description="Universal Adaptive Multi-Agent Pipeline — Reply Mirror",
+        description="Project Antigravity — Dynamic Multi-Agent Anomaly Detection",
     )
     parser.add_argument(
         "--manifest", "-m",
@@ -86,7 +87,7 @@ def main() -> None:
         handlers=[console_handler, actions_handler, troubleshoot_handler],
     )
     
-    logger = logging.getLogger("MirrorMain")
+    logger = logging.getLogger("AntigravityMain")
     logger.info("  [System] Run ID: %s", run_timestamp)
     logger.info("  [Output] Logs: %s (Standard) | %s (Deep Debug)", actions_file, troubleshoot_file)
     logger.info("  [Output] Results will be saved in %s", results_dir)
@@ -104,6 +105,7 @@ def main() -> None:
             manager=manifest_manager,
             results_dir=results_dir,
             run_id=run_timestamp,
+            target_stage=args.stage,
         )
 
         c = Console()
@@ -119,7 +121,7 @@ def main() -> None:
 
     except Exception as exc:
         Console().print(f"[bold red]Critical Pipeline Failure:[/] {exc}")
-        logging.exception("Mirror Pipeline crashed during execution")
+        logging.exception("Project Antigravity Pipeline crashed during execution")
         sys.exit(1)
 
 

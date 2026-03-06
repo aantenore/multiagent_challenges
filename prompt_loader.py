@@ -16,11 +16,11 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 # ── Built-in defaults (used if template files are missing) ──────────────
 
 _DEFAULT_SYSTEM = (
-    "You are a health-trajectory analysis agent. "
+    "You are a domain-agnostic anomaly analysis agent. "
     'Respond ONLY with a JSON object: '
-    '{{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}. '
-    "prediction=0 means standard monitoring, "
-    "prediction=1 means preventive support needed."
+    '{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}. '
+    "prediction=0 means standard monitoring (normal), "
+    "prediction=1 means anomaly detected (requires attention)."
 )
 
 

@@ -85,6 +85,7 @@ class DossierBuilder:
     def _iter_all(
         buckets: dict[str, list[tuple[ManifestEntry, pd.DataFrame]]],
     ):
+        """Yield each role and its corresponding entry/dataframe pairs across all buckets."""
         for role, frames in buckets.items():
             for pair in frames:
                 yield role, pair

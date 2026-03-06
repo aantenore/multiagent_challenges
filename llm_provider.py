@@ -97,6 +97,7 @@ class OpenAIProvider(BaseLLMProvider):
         json_mode: bool = True,
         callbacks: list[Any] | None = None,
     ) -> str:
+        """Execute a chat completion request using the OpenAI provider via LangChain."""
         from langchain_openai import ChatOpenAI
         from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -117,6 +118,7 @@ class OpenAIProvider(BaseLLMProvider):
         return _extract_text(response_content) or "{}"
 
     def resolve_model(self, role: str) -> str:
+        """Resolve the given role ('nano', 'cheap', 'smart') to a specific OpenAI model name."""
         return self._models.get(role, self._models["cheap"])
 
 
@@ -144,6 +146,7 @@ class GeminiProvider(BaseLLMProvider):
         json_mode: bool = True,
         callbacks: list[Any] | None = None,
     ) -> str:
+        """Execute a chat completion request using the Google Gemini provider via LangChain."""
         from langchain_google_genai import ChatGoogleGenerativeAI
         from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -160,6 +163,7 @@ class GeminiProvider(BaseLLMProvider):
         return _extract_text(response_content) or "{}"
 
     def resolve_model(self, role: str) -> str:
+        """Resolve the given role ('nano', 'cheap', 'smart') to a specific Gemini model name."""
         return self._models.get(role, self._models["cheap"])
 
 

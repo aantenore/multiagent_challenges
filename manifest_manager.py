@@ -52,6 +52,7 @@ class ManifestManager:
 
     @property
     def manifest(self) -> Manifest:
+        """Return the loaded manifest object, raising an error if it hasn't been loaded."""
         if self._manifest is None:
             raise RuntimeError("Call .load() before accessing .manifest")
         return self._manifest

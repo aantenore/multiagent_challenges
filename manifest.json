@@ -1,13 +1,13 @@
 {
     "stages": [
         {
-            "name": "level_1",
-            "output_file": "predictions_lev1.txt",
+            "name": "stage_1",
+            "output_file": "predictions_stage1.txt",
             "training_sources": [
                 {
                     "path": "resources/case_1/training/public_lev_1/status 2.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
-                    "description": "Level 1 training health events.",
+                    "description": "Stage 1 training health events.",
                     "columns": {
                         "EventID": "Unique event identifier",
                         "CitizenID": "8-char citizen ID (join key)",
@@ -21,13 +21,13 @@
                 {
                     "path": "resources/case_1/training/public_lev_1/locations 2.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
-                    "description": "Level 1 training GPS pings.",
+                    "description": "Stage 1 training GPS pings.",
                     "columns": {"user_id": "Citizen ID", "timestamp": "ISO-8601", "lat": "Latitude", "lng": "Longitude", "city": "City name"}
                 },
                 {
                     "path": "resources/case_1/training/public_lev_1/users 2.json",
                     "role": "profile", "id_column": "_user_id", "format": "json",
-                    "description": "Level 1 training demographic profiles.",
+                    "description": "Stage 1 training demographic profiles.",
                     "columns": {"user_id": "Citizen ID", "birth_year": "Year of birth", "job": "Occupation", "residence": "Object with city, lat, lng"}
                 }
             ],
@@ -35,113 +35,146 @@
                 {
                     "path": "resources/case_1/evaluation/public_lev_1/status_new.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
-                    "description": "Level 1 evaluation health events."
+                    "description": "Stage 1 evaluation health events.",
+                    "columns": {
+                        "EventID": "Unique event identifier",
+                        "CitizenID": "8-char citizen ID (join key)",
+                        "EventType": "Event type",
+                        "PhysicalActivityIndex": "0-100 activity level",
+                        "SleepQualityIndex": "0-100 sleep quality",
+                        "EnvironmentalExposureLevel": "0-100 environmental risk",
+                        "Timestamp": "ISO-8601 datetime"
+                    }
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_1/locations 3.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
-                    "description": "Level 1 evaluation GPS pings."
+                    "description": "Stage 1 evaluation GPS pings.",
+                    "columns": {"user_id": "Citizen ID", "timestamp": "ISO-8601", "lat": "Latitude", "lng": "Longitude", "city": "City name"}
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_1/users 3.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
-                    "description": "Level 1 evaluation profiles."
+                    "description": "Stage 1 evaluation profiles.",
+                    "columns": {"user_id": "Citizen ID", "birth_year": "Year of birth", "job": "Occupation", "residence": "Object with city, lat, lng"}
                 }
             ]
         },
         {
-            "name": "level_2",
-            "output_file": "predictions_lev2.txt",
+            "name": "stage_2",
+            "output_file": "predictions_stage2.txt",
             "training_sources": [
                 {
                     "path": "resources/case_1/training/public_lev_2/public_lev_2/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
-                    "description": "Level 2 training health events."
+                    "description": "Stage 2 training health events.",
+                    "columns": {
+                        "CitizenID": "8-char citizen ID",
+                        "EventType": "Event type",
+                        "PhysicalActivityIndex": "0-100 activity level",
+                        "SleepQualityIndex": "0-100 sleep quality",
+                        "Timestamp": "ISO-8601 datetime"
+                    }
                 },
                 {
                     "path": "resources/case_1/training/public_lev_2/public_lev_2/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
-                    "description": "Level 2 training GPS pings."
+                    "description": "Stage 2 training GPS pings.",
+                    "columns": {"user_id": "Citizen ID", "timestamp": "ISO-8601", "lat": "Latitude", "lng": "Longitude"}
                 },
                 {
                     "path": "resources/case_1/training/public_lev_2/public_lev_2/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
-                    "description": "Level 2 training profiles."
+                    "description": "Stage 2 training profiles.",
+                    "columns": {"user_id": "Citizen ID", "age": "Entity age", "gender": "Gender", "residence": "City/Location"}
                 },
                 {
                     "path": "resources/case_1/training/public_lev_2/public_lev_2/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
-                    "description": "Level 2 training persona narratives with behavioral and health context."
+                    "description": "Stage 2 training persona narratives with behavioral and health context.",
+                    "columns": {"entity_id": "Unique entity ID", "content": "Narrative character description"}
                 }
             ],
             "evaluation_sources": [
                 {
                     "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
-                    "description": "Level 2 evaluation health events."
+                    "description": "Stage 2 evaluation health events.",
+                    "columns": {"CitizenID": "Citizen ID", "EventType": "Event Type", "Timestamp": "ISO Date"}
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
-                    "description": "Level 2 evaluation GPS pings."
+                    "description": "Stage 2 evaluation GPS pings.",
+                    "columns": {"user_id": "Citizen ID", "lat": "Latitude", "lng": "Longitude"}
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
-                    "description": "Level 2 evaluation profiles."
+                    "description": "Stage 2 evaluation profiles.",
+                    "columns": {"user_id": "Citizen ID", "job": "Occupation"}
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_2/public_lev_2/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
-                    "description": "Level 2 evaluation persona narratives."
+                    "description": "Stage 2 evaluation persona narratives.",
+                    "columns": {"entity_id": "Entity ID", "text": "Contextual narrative"}
                 }
             ]
         },
         {
-            "name": "level_3",
-            "output_file": "predictions_lev3.txt",
+            "name": "stage_3",
+            "output_file": "predictions_stage3.txt",
             "training_sources": [
                 {
                     "path": "resources/case_1/training/public_lev_3/public_lev_3/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
-                    "description": "Level 3 training health events."
+                    "description": "Stage 3 training health events.",
+                    "columns": {"CitizenID": "ID", "EventType": "Type", "Timestamp": "Date"}
                 },
                 {
                     "path": "resources/case_1/training/public_lev_3/public_lev_3/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
-                    "description": "Level 3 training GPS pings."
+                    "description": "Stage 3 training GPS pings.",
+                    "columns": {"user_id": "ID", "lat": "Lat", "lng": "Lng"}
                 },
                 {
                     "path": "resources/case_1/training/public_lev_3/public_lev_3/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
-                    "description": "Level 3 training profiles."
+                    "description": "Stage 3 training profiles.",
+                    "columns": {"user_id": "ID", "profession": "Work"}
                 },
                 {
                     "path": "resources/case_1/training/public_lev_3/public_lev_3/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
-                    "description": "Level 3 training persona narratives."
+                    "description": "Stage 3 training persona narratives.",
+                    "columns": {"entity_id": "ID", "bio": "Extended background info"}
                 }
             ],
             "evaluation_sources": [
                 {
                     "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/status.csv",
                     "role": "temporal", "id_column": "CitizenID", "format": "csv",
-                    "description": "Level 3 evaluation health events."
+                    "description": "Stage 3 evaluation health events.",
+                    "columns": {"CitizenID": "ID", "Timestamp": "ISO Datetime"}
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/locations.json",
                     "role": "spatial", "id_column": "user_id", "format": "json",
-                    "description": "Level 3 evaluation GPS pings."
+                    "description": "Stage 3 evaluation GPS pings.",
+                    "columns": {"user_id": "ID", "lat": "Latitude", "lng": "Longitude"}
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/users.json",
                     "role": "profile", "id_column": "user_id", "format": "json",
-                    "description": "Level 3 evaluation profiles."
+                    "description": "Stage 3 evaluation profiles.",
+                    "columns": {"user_id": "ID", "details": "Demographic information"}
                 },
                 {
                     "path": "resources/case_1/evaluation/public_lev_3/public_lev_3/personas.md",
                     "role": "context", "id_column": "entity_id", "format": "md",
-                    "description": "Level 3 evaluation persona narratives."
+                    "description": "Stage 3 evaluation persona narratives.",
+                    "columns": {"entity_id": "ID", "story": "Full behavioral context"}
                 }
             ]
         }

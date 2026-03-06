@@ -1,35 +1,27 @@
-# 📙 The Book of Mirror: Volume III — Developer Manual
+# 📙 Project Antigravity: Volume III — Developer Manual
 
-A technical deep-dive into the Mirror codebase for engineers and architects.
+A technical deep-dive into the Project Antigravity codebase.
 
-## 1. The Core Loop (`pipeline.py`)
-The pipeline follows a `Fit -> Sanity -> Evaluate` lifecycle.
+## 1. Development Workflow
 
-### 1.1 The Sanity Check (predict_train)
-Before predicting on unseen data, Mirror predicts on its own training set. This serves two purposes:
-1.  **Baseline Validation**: Confirms L0 is learning.
-2.  **RAG Priming**: Populates memory with actual examples of training outliers.
+### 1.1 The Streaming Execution
+1.  **Historical Indexing**: The pipeline first processes the historical window to seed the Memory Store (Pillar 2).
+2.  **Live Inference**: The pipeline then evaluates the continuous data stream using the established memory and filters.
 
-## 2. LLM Provider Tiering (`llm_provider.py`)
-Mirror calculates its own budget using a triple-tier model:
-- **Nano**: $0.01 per 1M tokens. Used for L0 and simple filtering.
-- **Cheap**: $0.15 per 1M tokens. Used for L1 SwarmExperts.
-- **Smart**: $15.00 per 1M tokens. Reserved for high-stakes L2 arbitration.
+### 1.2 Model Tiering
+Antigravity supports a triple-tier model architecture to optimize cost vs. intelligence:
+- **Nano**: Used for Pillar 1 (Mathematical Filter) prompting.
+- **Cheap**: Used for Pillar 3 (Analytical Squads) swarms.
+- **Smart**: Used for Pillar 4 (Global Orchestrator) final judgment.
 
-## 3. Parallelism Strategies
-- **Entity Level**: Pipeline processes entities in chunks using `ThreadPoolExecutor`.
-- **Agent Level**: `RoleCoordinator` executes N agents in parallel to reach consensus.
-- **IO Level**: Asynchronous logging and Langfuse tracing ensure no bottlenecks during API calls.
+## 2. Code Standards
 
----
+- **Absolute Agnosticity**: Never hardcode strings like "User", "Patient", or "Citizen" in core modules. Use `{entity_id}`.
+- **Stateless Pillars**: Pillars should be self-contained and resettable between stages.
+- **Pydantic Validation**: All configurations must be validated via `settings.py`.
 
-## 4. Troubleshooting
+## 3. Telemetry & Tracing
 
-| Symptom | Probable Cause | Fix |
-|---------|----------------|-----|
-| `ValidationError` | Incorrect manifest role | Use `csv`, `json`, or `md` for format. |
-| `IndexError` | Insufficient ACF data | Increase training set size for the entity. |
-| `RateLimitError` | API Quota reached | Change `max_workers` from 10 to 3 in `pipeline.py`. |
-
----
-*Volume IV: Architectural Blueprints & Flowcharts coming next.*
+Project Antigravity leverages Langfuse for deep observability. Execution traces for LLM interactions and squad consensus must be tagged properly to distinguish between operations. 
+- Execution traces are tagged dynamically as `['historical_indexing']` when processing the past window.
+- Execution traces are tagged dynamically as `['live_inference']` when scoring the current continuous sliding window.

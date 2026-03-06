@@ -28,9 +28,11 @@ def generate_session_id(prefix: str | None = None):
     return f"{team_name}-{suffix}"
 
 def set_current_session_id(session_id: str):
+    """Set the current session ID in the thread-local storage."""
     _local.session_id = session_id
 
 def get_current_session_id():
+    """Retrieve or generate the current session ID from thread-local storage."""
     if not hasattr(_local, "session_id"):
         _local.session_id = generate_session_id()
     return _local.session_id
@@ -56,6 +58,3 @@ def run_llm_call(session_id, model, system_message, prompt):
 
     return response
 
-print("✓ Langfuse initialized successfully")
-print(f"✓ Public key: {os.getenv('LANGFUSE_PUBLIC_KEY', 'Not set')[:20]}...")
-print("✓ Helper functions ready: generate_session_id(), invoke_langchain(), run_llm_call()")

@@ -1,14 +1,14 @@
 """
-Layer 3 — Lightweight Local RAG (Continuous Learning).
-Uses ChromaDB as a local vector store to memorise error cases
-and provide few-shot examples to Layer 1 agents.
+Pillar 2 — Modular Dynamic Memory (Continuous Learning).
+Uses ChromaDB as a local vector store to memorize case details
+and provide few-shot examples to Analytical Squads.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from settings import get_settings
 
@@ -21,22 +21,27 @@ try:
     _HAS_CHROMADB = True
 except ImportError:
     _HAS_CHROMADB = False
-    logger.info("ChromaDB not installed — RAG layer will be a no-op")
+    logger.info("ChromaDB not installed — Memory Pillar will be a no-op")
 
 
 class RAGStore:
-    """Local vector database for continuous learning via error cases.
+    """3-Tier Hierarchical Vector Store (Project Antigravity).
 
-    Stores dossier summaries of misclassified entities so that
-    subsequent runs can retrieve them as few-shot examples.
+    Tiers:
+    1. Identity History: Individual entity's past similar data points.
+    2. Contextual Neighbors: Cross-entity signals within similar groupings (e.g. Geo/Social).
+    3. Global Rules: Universal patterns and architectural heuristics.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, namespace: str = "default") -> None:
         cfg = get_settings()
         self._enabled = _HAS_CHROMADB
-        self._collection_name = cfg.rag_collection_name
         self._top_k = cfg.top_k_rag
-        self._collection = None
+        self._namespace = namespace
+        
+        self._coll_indiv = None
+        self._coll_geo = None
+        self._coll_global = None
 
         if self._enabled:
             try:
@@ -45,32 +50,52 @@ class RAGStore:
                     settings=ChromaSettings(anonymized_telemetry=False),
                 )
                 self._client = client
-                self._collection = client.get_or_create_collection(
-                    name=self._collection_name,
+                
+                # 1. Individual Collection
+                self._coll_indiv = client.get_or_create_collection(
+                    name=f"{self._namespace}_{cfg.rag_individual_collection}",
                     metadata={"hnsw:space": "cosine"},
                 )
+                # 2. Geo-Local/Contextual Collection
+                self._coll_geo = client.get_or_create_collection(
+                    name=f"{self._namespace}_{cfg.rag_geo_collection}",
+                    metadata={"hnsw:space": "cosine"},
+                )
+                # 3. Global Knowledge Collection
+                self._coll_global = client.get_or_create_collection(
+                    name=f"{self._namespace}_{cfg.rag_global_collection}",
+                    metadata={"hnsw:space": "cosine"},
+                )
+                
                 logger.info(
-                    "RAG store ready: collection=%s, existing=%d docs",
-                    self._collection_name,
-                    self._collection.count(),
+                    "Hierarchical Knowledge Store ready: Identity(%d), Context(%d), Global(%d)",
+                    self._coll_indiv.count(),
+                    self._coll_geo.count(),
+                    self._coll_global.count(),
                 )
             except Exception as exc:
-                logger.warning("Failed to init ChromaDB: %s — disabling RAG", exc)
+                logger.warning("Failed to init Hierarchical Knowledge Store: %s — disabling memory", exc)
                 self._enabled = False
 
     def reset(self) -> None:
-        """Clear the collection for a new level (per-level isolation)."""
-        if not self._enabled or self._collection is None:
+        """Clear all memory collections for a fresh run."""
+        if not self._enabled:
             return
-        try:
-            self._client.delete_collection(self._collection_name)
-            self._collection = self._client.get_or_create_collection(
-                name=self._collection_name,
-                metadata={"hnsw:space": "cosine"},
-            )
-            logger.info("RAG: collection reset for new level")
-        except Exception as exc:
-            logger.warning("RAG reset failed: %s", exc)
+        cfg = get_settings()
+        collections = [
+            (f"{self._namespace}_{cfg.rag_individual_collection}", "_coll_indiv"),
+            (f"{self._namespace}_{cfg.rag_geo_collection}", "_coll_geo"),
+            (f"{self._namespace}_{cfg.rag_global_collection}", "_coll_global")
+        ]
+        for full_name, attr in collections:
+            try:
+                self._client.delete_collection(full_name)
+                setattr(self, attr, self._client.get_or_create_collection(
+                    name=full_name, metadata={"hnsw:space": "cosine"}
+                ))
+            except Exception as exc:
+                logger.warning("Memory reset failed for %s: %s", full_name, exc)
+        logger.info("Knowledge Store [%s] reset", self._namespace)
 
     # ── Write ───────────────────────────────────────────────────────────
 
@@ -79,38 +104,38 @@ class RAGStore:
         entity_id: str,
         dossier_summary: str,
         label: int,
+        scope: Literal["individual", "geo", "global"] = "individual",
+        meta_tag: str | None = None
     ) -> None:
-        """Store an evaluated case for future few-shot retrieval.
-
-        Stores the pipeline's decision in self-supervised mode.
-        """
-        if not self._enabled or self._collection is None:
+        """Store an evaluated record in the identity, context, or global memory tier."""
+        cfg = get_settings()
+        if not self._enabled or not cfg.pillar_memory_enabled:
             return
+            
+        collection = self._coll_indiv
+        if scope == "geo": collection = self._coll_geo
+        elif scope == "global": collection = self._coll_global
+        
+        if collection is None: return
 
         doc_id = hashlib.sha256(
-            f"{entity_id}:{label}".encode()
+            f"{entity_id}:{label}:{meta_tag or ''}".encode()
         ).hexdigest()[:16]
 
-        self._collection.upsert(
+        collection.upsert(
             ids=[doc_id],
             documents=[dossier_summary],
             metadatas=[
                 {
                     "entity_id": entity_id,
                     "label": label,
+                    "meta_tag": meta_tag or "N/A",
+                    "scope": scope,
                     "summary": dossier_summary[:500],
                 }
             ],
         )
-        logger.info(
-            "RAG: stored case for %s (label=%d) — collection count: %d",
-            entity_id,
-            label,
-            self._collection.count(),
-        )
-        logger.debug(
-            "RAG Payload for %s:\n%s", entity_id, dossier_summary
-        )
+        logger.info("Memory [%s]: stored record for %s", scope, entity_id)
 
     # ── Read ────────────────────────────────────────────────────────────
 
@@ -118,61 +143,64 @@ class RAGStore:
         self,
         dossier_summary: str,
         top_k: int | None = None,
+        scope: Literal["all", "individual", "geo", "global"] = "all",
+        meta_tag: str | None = None
     ) -> list[dict[str, Any]]:
-        """Retrieve the most similar past error cases."""
-        if not self._enabled or self._collection is None:
+        """Retrieve most similar historical records from the requested memory tier(s)."""
+        cfg = get_settings()
+        if not self._enabled or not cfg.pillar_memory_enabled:
             return []
 
         k = top_k or self._top_k
-
-        try:
-            results = self._collection.query(
-                query_texts=[dossier_summary],
-                n_results=min(k, max(self._collection.count(), 1)),
-            )
-        except Exception as exc:
-            logger.warning("RAG query failed: %s", exc)
-            return []
+        collections = []
+        if scope == "individual" or scope == "all": collections.append(self._coll_indiv)
+        if scope == "geo" or scope == "all": collections.append(self._coll_geo)
+        if scope == "global" or scope == "all": collections.append(self._coll_global)
 
         examples: list[dict[str, Any]] = []
-        metadatas = results.get("metadatas", [[]])
-        for meta in metadatas[0]:
-            examples.append(meta)
+        for coll in collections:
+            if coll is None or coll.count() == 0: continue
+            try:
+                results = coll.query(
+                    query_texts=[dossier_summary],
+                    n_results=min(k, coll.count()),
+                )
+                metadatas = results.get("metadatas", [[]])
+                for meta in metadatas[0]:
+                    examples.append(meta)
+            except Exception as exc:
+                logger.warning("Memory query failed in knowledge store: %s", exc)
 
-        logger.debug(
-            "RAG Query returned %d examples. Top case: %s",
-            len(examples),
-            examples[0].get("entity_id") if examples else "None"
-        )
-        return examples
+        return examples[:k]
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
     def summarise_dossier(self, dossier) -> str:
-        """Create a compact, PII-free text summary of a dossier for vectorisation."""
-        parts = [f"ID: {dossier.entity_id}"]
+        """Create a compact string representation of an entity dossier for vectorization."""
+        parts = [f"ENTITY: {dossier.entity_id}"]
+        parts.append(f"Properties: {dossier.get_compact_profile()}")
         
-        # Use compact profile (PII-free)
-        parts.append(f"Profile: {dossier.get_compact_profile()}")
-        
-        # Only most significant features (top 8)
         feats = dossier.get_filtered_features(top_n=8, threshold=0.1)
         if feats:
             feat_str = ", ".join(f"{k}={v:.1f}" for k, v in sorted(feats.items()))
-            parts.append(f"Features: {feat_str}")
+            parts.append(f"Numeric Signals: {feat_str}")
         
-        # Very short context snippet
         if dossier.context_data:
-            parts.append(f"Context: {dossier.context_data[:150]}...")
+            parts.append(f"Narrative: {dossier.context_data[:150]}...")
             
         return " | ".join(parts)
 
     @property
     def is_enabled(self) -> bool:
+        """Return whether the RAG store (ChromaDB capability) is currently enabled."""
         return self._enabled
 
     @property
     def count(self) -> int:
-        if self._enabled and self._collection is not None:
-            return self._collection.count()
-        return 0
+        """Return the combined total count of records across all initialized memory collections."""
+        count = 0
+        if self._enabled:
+            if self._coll_indiv: count += self._coll_indiv.count()
+            if self._coll_geo: count += self._coll_geo.count()
+            if self._coll_global: count += self._coll_global.count()
+        return count
