@@ -125,10 +125,10 @@ class AdaptivePipeline:
         # ── 1. Reset & Setup ────────────────────────────────────────────────
         if self._rag.is_enabled:
             self._rag.reset()
-            logger.info("  [RAG] Memory reset for Level %d (%s)", stage_idx + 1, stage.name)
+            logger.info("  [RAG] Memory reset for Stage %d (%s)", stage_idx + 1, stage.name)
 
         self._router = OneClassRouter()
-        logger.info("  [L0] Anomaly Engine (IsolationForest) reset for Level %d", stage_idx + 1)
+        logger.info("  [L0] Anomaly Engine (IsolationForest) reset for Stage %d", stage_idx + 1)
 
         # ── 2. Training Phase (FIT) ─────────────────────────────────────────
         train_sources = stage.training_sources
@@ -165,7 +165,7 @@ class AdaptivePipeline:
                     console=console,
                 ) as progress:
                     rag_task = progress.add_task(
-                        f"  [RAG] Populating L{stage_idx} Memory…", total=len(train_dossiers)
+                        f"  [RAG] Populating Stage {stage_idx} Memory…", total=len(train_dossiers)
                     )
 
                     for eid, dossier in train_dossiers.items():
@@ -194,7 +194,7 @@ class AdaptivePipeline:
                 console=console,
             ) as progress:
                 sanity_task = progress.add_task(
-                    f"  [Sanity] Level {stage_idx} Self-Test…", total=len(train_dossiers)
+                    f"  [Sanity] Stage {stage_idx} Self-Test…", total=len(train_dossiers)
                 )
                 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -255,7 +255,7 @@ class AdaptivePipeline:
             console=console,
         ) as progress:
             eval_task = progress.add_task(
-                f"  [Eval] Level {stage_idx} Production Appraisal…", total=len(eval_dossiers)
+                f"  [Eval] Stage {stage_idx} Production Appraisal…", total=len(eval_dossiers)
             )
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
