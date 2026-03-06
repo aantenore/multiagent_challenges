@@ -37,10 +37,10 @@ def main() -> None:
         help="Logging verbosity",
     )
     parser.add_argument(
-        "--level",
+        "--stage", "-s",
         type=str,
         default=None,
-        help="Specify a single stage/level to run (e.g., 'level_1')",
+        help="Specify a single stage to run (e.g., 'stage_1')",
     )
 
     args = parser.parse_args()
@@ -94,13 +94,13 @@ def main() -> None:
     # ── Run pipeline ────────────────────────────────────────────────
     from pipeline import AdaptivePipeline
 
-    logger.info("  [Pipeline] Initializing Adaptive Multilevel Pipeline...")
+    logger.info("  [Pipeline] Initializing Adaptive Multi-stage Pipeline...")
     pipeline = AdaptivePipeline()
     try:
         stage_results = pipeline.run(
             manifest_path=args.manifest, 
             results_dir=results_dir,
-            target_level=args.level
+            target_stage=args.stage
         )
 
         c = Console()

@@ -255,7 +255,9 @@ class RoleCoordinator:
         # Run all agents IN PARALLEL
         verdicts: list[AgentVerdict] = []
 
+        session_id = get_current_session_id()
         def _run_agent(agent: DomainAgent) -> AgentVerdict:
+            set_current_session_id(session_id)
             return agent.analyze(dossier, rag_examples, l0_report=l0_report)
 
         with ThreadPoolExecutor(max_workers=n_agents) as pool:
@@ -414,7 +416,9 @@ class SwarmFactory:
         if detection_metadata is not None:
             l0_report = getattr(detection_metadata, 'report', '')
 
+        session_id = get_current_session_id()
         def _run_coord(coord: RoleCoordinator) -> SwarmConsensus:
+            set_current_session_id(session_id)
             return coord.run(dossier, rag_examples, l0_complexity, l0_report=l0_report)
 
         results: list[SwarmConsensus] = []

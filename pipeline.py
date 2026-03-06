@@ -62,9 +62,9 @@ class AdaptivePipeline:
 
     def run(
         self,
-        manifest_path: str | Path,
-        results_dir: Path | None = None,
-        target_level: str | None = None,
+        manifest_path: str,
+        results_dir: Path,
+        target_stage: str | None = None,
     ) -> dict[str, list[PipelineResult]]:
         """Execute the full N-stage pipeline or a specific stage.
 
@@ -84,20 +84,23 @@ class AdaptivePipeline:
         manager.load()
         stages = manager.stages
 
-        if target_level:
-            stages = [s for s in stages if s.name == target_level]
-            if not stages:
-                console.print(f"[bold red]Target level '{target_level}' not found in manifest.[/]")
-                return {}
-
         console.print(f"Stages: [bold]{len(stages)}[/] — {[s.name for s in stages]}")
 
-        all_results: dict[str, list[PipelineResult]] = {}
+        # Early validation for target_stage
+        if target_stage and not any(s.name == target_stage for s in stages):
+            console.print(f"[bold red]Target stage '{target_stage}' not found in manifest.[/]")
+            return {}
 
+        all_results: dict[str, list[PipelineResult]] = {}
         for idx, stage in enumerate(stages):
+            if target_stage and stage.name != target_stage:
+                continue
+            
             console.rule(f"[bold yellow]Stage {idx + 1}/{len(stages)}: {stage.name}")
             results = self._run_stage(manager, idx, stage, results_dir=results_dir)
             all_results[stage.name] = results
+
+        return all_results
 
         console.rule("[bold cyan]Pipeline Complete")
         console.print("\n[bold green]Pipeline finished successfully.[/]\n")
@@ -307,6 +310,8 @@ class AdaptivePipeline:
         4. Layer 2 (Orchestrator): Holistic review of swarm verdicts + Profile + Context.
         """
         import time
+        if session_id:
+            set_current_session_id(session_id)
         start_t = time.time()
         eid = dossier.entity_id
         verdicts = []
