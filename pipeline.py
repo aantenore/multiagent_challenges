@@ -165,7 +165,7 @@ class AdaptivePipeline:
                     console=console,
                 ) as progress:
                     rag_task = progress.add_task(
-                        f"  [RAG] Populating Stage {stage_idx} Memory…", total=len(train_dossiers)
+                        f"  [RAG] Populating Stage {stage_idx + 1} Memory…", total=len(train_dossiers)
                     )
 
                     for eid, dossier in train_dossiers.items():
@@ -194,7 +194,7 @@ class AdaptivePipeline:
                 console=console,
             ) as progress:
                 sanity_task = progress.add_task(
-                    f"  [Sanity] Stage {stage_idx} Self-Test…", total=len(train_dossiers)
+                    f"  [Sanity] Stage {stage_idx + 1} Self-Test…", total=len(train_dossiers)
                 )
                 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -255,7 +255,7 @@ class AdaptivePipeline:
             console=console,
         ) as progress:
             eval_task = progress.add_task(
-                f"  [Eval] Stage {stage_idx} Production Appraisal…", total=len(eval_dossiers)
+                f"  [Eval] Stage {stage_idx + 1} Production Appraisal…", total=len(eval_dossiers)
             )
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
