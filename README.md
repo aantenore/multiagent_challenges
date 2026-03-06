@@ -21,7 +21,11 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
                        ▼
           ┌─────────────────────────┐
           │  Per-Level Training     │  train_i only
-          │  IsolationForest Fit    │  (zero-cost math baseline)
+          │  DossierBuilder         │
+          └────────────┬────────────┘
+                       ▼
+          ┌─────────────────────────┐
+          │   Feature Engineering   │  sliding windows, dynamic lag (ACF)
           └────────────┬────────────┘
                        ▼
          ┌──────────────────────────┐
