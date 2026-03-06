@@ -30,18 +30,9 @@ logger = logging.getLogger(__name__)
 class DomainAgent(BaseAgent):
     """Agent specialising in a single data role (temporal, spatial, etc.)."""
 
-    def __init__(
-        self,
-        role: str,
-        semantic_metadata: dict[str, Any] | None = None,
-        slice_strategy: str = "recent",
-        window_size: int = 10,
-        **kwargs: Any
-    ) -> None:
+    def __init__(self, role: str, semantic_metadata: dict[str, Any] | None = None, **kwargs: Any) -> None:
         super().__init__(name=f"L1_{role}_agent", **kwargs)
         self.role = role
-        self.slice_strategy = slice_strategy
-        self.window_size = window_size
         self._semantic = semantic_metadata or {}
 
     def _build_prompt(
@@ -120,52 +111,19 @@ class DomainAgent(BaseAgent):
         """Return the JSON-serialised data slice for this role."""
         match self.role:
             case "temporal":
-                data = self._slice_list(dossier.temporal_data, self.window_size, self.slice_strategy)
+                # Reduced from 20 to 10 events for token efficiency
+                data = dossier.temporal_data[-10:]  
             case "spatial":
-                # Spatial usually less volume, but still capped
-                data = self._slice_list(dossier.spatial_data, max(15, self.window_size), self.slice_strategy)
+                # Reduced from 30 to 15 locations for token efficiency
+                data = dossier.spatial_data[-15:]  
             case "profile":
                 data = dossier.profile_data
             case "context":
-                # Scale context length slightly with window_size (heuristic)
-                limit = 1500 + (self.window_size - 10) * 50
-                return dossier.context_data[:max(500, limit)]
+                # Reduced from 3000 to 1500 chars for token efficiency
+                return dossier.context_data[:1500]
             case _:
                 data = {}
         return json.dumps(data, default=str, indent=1)
-
-    def _slice_list(self, full_list: list, n: int, strategy: str) -> list:
-        """Slice a list based on strategy and target size n."""
-        if not full_list:
-            return []
-        
-        if strategy == "recent":
-            return full_list[-n:]
-        
-        if strategy == "sparse":
-            # Sample throughout history (at least 2 events if possible)
-            if len(full_list) <= n:
-                return full_list
-            step = max(1, len(full_list) // n)
-            sampled = full_list[::step][-n:]
-            # Ensure the very last event is always included for timeliness
-            if full_list[-1] not in sampled:
-                sampled[-1] = full_list[-1]
-            return sampled
-            
-        if strategy == "critical":
-            # Priority to emergency/specialist or high risk events
-            # Note: relies on 'EventType' presence
-            critical_types = {"emergency visit", "specialist consultation", "follow-up assessment"}
-            critical = [r for r in full_list if r.get("EventType") in critical_types]
-            # Fill the rest with recent
-            needed = n - len(critical)
-            if needed > 0:
-                recent = [r for r in full_list[-n:] if r not in critical][:needed]
-                critical.extend(recent)
-            return sorted(critical, key=lambda x: x.get("Timestamp", 0))
-
-        return full_list[-n:]
 
     @staticmethod
     def _format_rag(examples: list[dict]) -> str:
@@ -280,32 +238,15 @@ class RoleCoordinator:
         complexity = self.assess_complexity(dossier, l0_complexity)
         n_agents = self._decide_n_agents(complexity)
 
-        # Dynamic Windowing: calculate window as % of total available data
-        # Scale percentage from 20% (at threshold) to 100% (at complexity=1.0)
-        total_data_len = len(dossier.temporal_data)
-        threshold = self._cfg.swarm_complexity_threshold
-        
-        if complexity <= threshold:
-            # Baseline: 20% of data or minimum 10 events
-            window_size = max(10, int(total_data_len * 0.2))
-        else:
-            # Linear scale percentage between 20% and 100%
-            ratio = (complexity - threshold) / (1.0 - threshold + 1e-9)
-            percentage = 0.2 + (0.8 * ratio)
-            window_size = max(10, int(total_data_len * percentage))
-        
-        # Ensure we don't try to take more than we have
-        window_size = min(total_data_len, window_size) if total_data_len > 0 else 10
-
         logger.info(
-            "  RoleCoordinator[%s] complexity=%.2f → N=%d agents, window=%d",
-            self.role, complexity, n_agents, window_size
+            "  RoleCoordinator[%s] complexity=%.2f → N=%d agents",
+            self.role, complexity, n_agents,
         )
 
-        # Spawn agents with varied temperatures and SLICING STRATEGIES
+        # Spawn agents with varied temperatures
         base_temp = self._cfg.model_temperature
         spread = self._cfg.swarm_temp_spread
-        agents = self._spawn_agents(n_agents, base_temp, spread, window_size=window_size)
+        agents = self._spawn_agents(n_agents, base_temp, spread)
 
         # Run all agents IN PARALLEL
         verdicts: list[AgentVerdict] = []
@@ -336,38 +277,29 @@ class RoleCoordinator:
         n: int,
         base_temp: float,
         spread: float,
-        window_size: int = 10,
     ) -> list[DomainAgent]:
-        """Create N DomainAgents with staggered temperatures and strategies."""
+        """Create N DomainAgents with staggered temperatures."""
         cfg = self._cfg
         from llm_provider import get_provider
         provider = get_provider()
         model_name = provider.resolve_model("cheap")
 
         agents: list[DomainAgent] = []
-        strategies = ["recent", "sparse", "critical"]
-
         for i in range(n):
             if n == 1:
                 temp = base_temp
-                strategy = "recent"
             else:
-                # Spread temperatures
+                # Spread temperatures evenly: base - spread/2 .. base + spread/2
                 t = base_temp + spread * (i / (n - 1) - 0.5)
                 temp = max(0.0, min(1.0, t))
-                # Cycle strategies for diversity
-                strategy = strategies[i % len(strategies)]
-
             agent = DomainAgent(
                 role=self.role,
                 semantic_metadata=self._semantic,
                 model_name=model_name,
                 temperature=temp,
-                slice_strategy=strategy,
-                window_size=window_size,
             )
             if n > 1:
-                agent.name = f"L1_{self.role}_agent_{i + 1}/{n} ({strategy})"
+                agent.name = f"L1_{self.role}_agent_{i + 1}/{n}"
             agents.append(agent)
         return agents
 
