@@ -243,7 +243,13 @@ class AdaptivePipeline:
             dossier.features = self._extractor.extract(dossier)
 
         if not coordinators:
-            roles_to_swarm = {e.role for e in eval_sources if e.role in {"temporal", "spatial"}}
+            # Automatically spawn coordinators for every unique role in the manifest
+            # except the meta-roles used for grounding/context.
+            cfg = get_settings()
+            roles_to_swarm = {
+                e.role for e in eval_sources 
+                if e.role not in {cfg.profile_role, cfg.context_role}
+            }
             coordinators = SwarmFactory.create_coordinators(
                 roles=roles_to_swarm,
                 manifest_entries=eval_sources,

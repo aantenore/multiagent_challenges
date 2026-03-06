@@ -36,41 +36,44 @@ class DossierBuilder:
 
     def build_all(self) -> dict[str, EntityDossier]:
         """Load every source, merge by entity ID, and return dossiers."""
-        temporal_frames: list[tuple[ManifestEntry, pd.DataFrame]] = []
-        spatial_frames: list[tuple[ManifestEntry, pd.DataFrame]] = []
-        profile_frames: list[tuple[ManifestEntry, pd.DataFrame]] = []
-        context_frames: list[tuple[ManifestEntry, pd.DataFrame]] = []
-
-        role_buckets = {
-            "temporal": temporal_frames,
-            "spatial": spatial_frames,
-            "profile": profile_frames,
-            "context": context_frames,
-        }
+        # role_buckets: role_name -> list of (entry, dataframe)
+        role_buckets: dict[str, list[tuple[ManifestEntry, pd.DataFrame]]] = {}
 
         for entry in self._entries:
             df = load_file(entry, self._base_dir)
-            bucket = role_buckets.get(entry.role)
-            if bucket is not None:
-                bucket.append((entry, df))
-            else:
-                logger.warning("Unknown role %r — skipping", entry.role)
+            if entry.role not in role_buckets:
+                role_buckets[entry.role] = []
+            role_buckets[entry.role].append((entry, df))
 
         # Discover all unique entity IDs across every source
         all_ids: set[str] = set()
-        for _, (entry, df) in self._iter_all(role_buckets):
-            all_ids.update(df[entry.id_column].astype(str).unique())
+        for role, frames in role_buckets.items():
+            for entry, df in frames:
+                all_ids.update(df[entry.id_column].astype(str).unique())
 
         logger.info("Building dossiers for %d entities", len(all_ids))
 
         dossiers: dict[str, EntityDossier] = {}
         for eid in sorted(all_ids):
+            # Dynamic domain data for all roles except special descriptors
+            cfg = get_settings()
+            domain_data: dict[str, list[dict[str, Any]]] = {}
+            profile_data: dict[str, Any] = {}
+            context_data: str = ""
+
+            for role, frames in role_buckets.items():
+                if role == cfg.profile_role:
+                    profile_data = self._profile_for(eid, frames)
+                elif role == cfg.context_role:
+                    context_data = self._context_for(eid, frames)
+                else:
+                    domain_data[role] = self._rows_for(eid, frames)
+
             dossiers[eid] = EntityDossier(
                 entity_id=eid,
-                temporal_data=self._rows_for(eid, temporal_frames),
-                spatial_data=self._rows_for(eid, spatial_frames),
-                profile_data=self._profile_for(eid, profile_frames),
-                context_data=self._context_for(eid, context_frames),
+                domain_data=domain_data,
+                profile_data=profile_data,
+                context_data=context_data,
             )
 
         return dossiers

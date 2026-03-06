@@ -50,7 +50,7 @@ class ManifestEntry(BaseModel):
     """Single data-source descriptor inside manifest.json."""
 
     path: str = Field(..., description="Relative path to the data file")
-    role: Literal["temporal", "spatial", "profile", "context"] = Field(
+    role: str = Field(
         ..., description="Logical role of this data source"
     )
     id_column: str = Field(..., description="Name of the entity-ID column")
@@ -124,12 +124,9 @@ class EntityDossier(BaseModel):
     """Unified dossier for a single entity, assembled from all sources."""
 
     entity_id: str = Field(..., description="Unique entity identifier")
-    temporal_data: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Time-series events (status / check-ups)",
-    )
-    spatial_data: list[dict[str, Any]] = Field(
-        default_factory=list, description="GPS / location pings"
+    domain_data: dict[str, list[dict[str, Any]]] = Field(
+        default_factory=dict,
+        description="Dynamic bucket for all domain-specific data (temporal, spatial, etc.)",
     )
     profile_data: dict[str, Any] = Field(
         default_factory=dict, description="Static user profile"

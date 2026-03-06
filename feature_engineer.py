@@ -36,15 +36,11 @@ class SlidingWindowExtractor:
         """Return a flat dict of numeric features for one entity."""
         features: dict[str, float] = {}
 
-        # --- Temporal features ---
-        temporal = dossier.temporal_data
-        if temporal:
-            features.update(self._temporal_features(temporal))
-
-        # --- Spatial features ---
-        spatial = dossier.spatial_data
-        if spatial:
-            features.update(self._spatial_features(spatial))
+        # --- Dynamic Domain features ---
+        # Automatically process every role in domain_data (temporal, spatial, or custom)
+        for role, rows in dossier.domain_data.items():
+            if rows:
+                features.update(self._extract_generic_features(role, rows))
 
         # --- Profile features ---
         if dossier.profile_data:
@@ -69,14 +65,8 @@ class SlidingWindowExtractor:
         "specialist consultation": 3,
     }
 
-    def _temporal_features(self, rows: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute per-column window stats + event-type features.
-
-        Uses pandas to handle true time-based rolling windows (3D, 7D),
-        properly accounting for irregular sampling intervals.
-        Additionally computes Autocorrelation (ACF) to discover natural
-        cycles (dynamic sizing) and computes features based on optimal lag.
-        """
+    def _extract_generic_features(self, role: str, rows: list[dict[str, Any]]) -> dict[str, float]:
+        """Compute per-column window stats + trend features for ANY role."""
         feats: dict[str, float] = {}
         if not rows:
             return feats
@@ -93,9 +83,9 @@ class SlidingWindowExtractor:
         else:
             return feats
 
-        # Auto-detect numeric columns (excluding IDs)
+        # Auto-detect numeric columns (excluding IDs and ignored columns)
         numeric_cols = df.select_dtypes(include=[np.number]).columns
-        cols_to_process = [c for c in numeric_cols if c not in {"CitizenID", "EventID", "user_id"}]
+        cols_to_process = [c for c in numeric_cols if c not in cfg.feature_ignore_columns]
 
         # Per-numeric-column sliding window
         for col in cols_to_process:
@@ -103,42 +93,40 @@ class SlidingWindowExtractor:
             if series.empty:
                 continue
 
-            feats[f"{col}_mean"] = float(series.mean())
-            feats[f"{col}_std"] = float(series.std()) if len(series) > 1 else 0.0
-            feats[f"{col}_min"] = float(series.min())
-            feats[f"{col}_max"] = float(series.max())
-            feats[f"{col}_delta"] = float(series.iloc[-1] - series.iloc[0])
+            feats[f"{role}_{col}_mean"] = float(series.mean())
+            feats[f"{role}_{col}_std"] = float(series.std()) if len(series) > 1 else 0.0
+            feats[f"{role}_{col}_min"] = float(series.min())
+            feats[f"{role}_{col}_max"] = float(series.max())
+            feats[f"{role}_{col}_delta"] = float(series.iloc[-1] - series.iloc[0])
 
-            # Full-series first-to-last delta (same as above since we process all available series)
-            feats[f"{col}_total_delta"] = feats[f"{col}_delta"]
+            # Full-series first-to-last delta
+            feats[f"{role}_{col}_total_delta"] = feats[f"{role}_{col}_delta"]
 
             # Velocity: delta over time span (in days)
             timespan_days = (series.index[-1] - series.index[0]).total_seconds() / 86400.0
             if timespan_days > 0:
-                feats[f"{col}_velocity"] = feats[f"{col}_delta"] / timespan_days
+                feats[f"{role}_{col}_velocity"] = feats[f"{role}_{col}_delta"] / timespan_days
             else:
-                feats[f"{col}_velocity"] = 0.0
+                feats[f"{role}_{col}_velocity"] = 0.0
 
-            # ── Moving Averages (True time-based 3D and 7D windows) ──
+            # ── Moving Averages (True time-based windows) ──
             if not series.empty:
-                # 3 days
-                roll3 = series.rolling("3D").mean()
+                # Primary window
+                roll3 = series.rolling(cfg.default_window_ma3).mean()
                 ma3 = float(roll3.iloc[-1])
-                feats[f"{col}_ma3"] = ma3
-                feats[f"{col}_ma3_deviation"] = float(series.iloc[-1] - ma3)
+                feats[f"{role}_{col}_ma3"] = ma3
+                feats[f"{role}_{col}_ma3_deviation"] = float(series.iloc[-1] - ma3)
                 
-                # 7 days
-                roll7 = series.rolling("7D").mean()
+                # Secondary window
+                roll7 = series.rolling(cfg.default_window_ma7).mean()
                 ma7 = float(roll7.iloc[-1])
-                feats[f"{col}_ma7"] = ma7
-                feats[f"{col}_ma7_deviation"] = float(series.iloc[-1] - ma7)
+                feats[f"{role}_{col}_ma7"] = ma7
+                feats[f"{role}_{col}_ma7_deviation"] = float(series.iloc[-1] - ma7)
 
             # ── Linear Slope / Trend ──
-            if len(series) >= 3:
-                # Use days since first event as X axis for proper slope
                 x = (series.index - series.index[0]).total_seconds() / 86400.0
                 slope = float(np.polyfit(x, series.values, 1)[0])
-                feats[f"{col}_slope"] = slope
+                feats[f"{role}_{col}_slope"] = slope
 
             # ── Dynamic Sizing via ACF (Autocorrelation) ──
             # Re-sample smoothly to daily frequency to calculate ACF reliably if we have enough span
