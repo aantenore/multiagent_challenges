@@ -316,7 +316,7 @@ class AdaptivePipeline:
         
         # Expressive reasoning for L0 in Audit
         if not detection_meta.is_anomalous:
-            l0_verdict.reasoning = f"Baseline verified. Anomaly score {detection_meta.avg_conf:.3f} is within normal thresholds."
+            l0_verdict.reasoning = f"Baseline verified. Anomaly score {detection_meta.confidence:.3f} is within normal thresholds."
 
         if l0_verdict is not None and not force_escalation:
             verdicts.append(l0_verdict)
