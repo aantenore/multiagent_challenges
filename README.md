@@ -11,68 +11,39 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
 
 **Objective:** Maximise `(F1-Score + Value Recovery) / 2` with asymmetric cost awareness (False Negatives ≫ False Positives).
 
----
-
-## 🏗️ Architecture
+### 3-Tier Multi-Agent Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                  manifest.json                          │
-│   N stages: [train₁,eval₁] → [train₂,eval₂] → ...     │
-│   Each level is SELF-CONTAINED (no cross-level data)    │
+│   N stages: [train₁,eval₁] → [train₂,eval₂] → ...       │
 └──────────────────────┬──────────────────────────────────┘
                        ▼
           ┌─────────────────────────┐
-          │  Per-Level Training     │  train_i only (class 0 = well-being)
-          │  DossierBuilder         │
+          │  Per-Level Training     │  train_i only
+          │  IsolationForest Fit    │  (zero-cost math baseline)
           └────────────┬────────────┘
                        ▼
          ┌──────────────────────────┐
-         │  Feature Engineering    │  sliding windows, dynamic lag (ACF)
-         └────────────┬────────────┘
-                      ▼
-
-### Dynamic Time-Aware Feature Extraction
-
-The pipeline uses `pandas` to extract true time-aware rolling features, solving issues with irregular sampling intervals. 
-Instead of relying on fixed record counts, it calculates features over continuous `3D` and `7D` rolling windows.
-
-**Killer Feature — ACF Dynamic Sizing:**
-To maximize Agentic Efficiency (a 40% weighted challenge metric), the engine adapts to the physiological rhythms of each individual citizen.
-Using `statsmodels`, it computes the **Autocorrelation (ACF)** on the citizen's historical series (e.g., PhysicalActivityIndex). By identifying the dominant lag (peak autocorrelation), the system discovers the user's natural cycle length automatically. 
-It then extracts dynamic features (e.g., `_dynamic_mean`, `_dynamic_deviation`) perfectly tailored to their unique circadian or weekly rhythms.
-If the series is too short or irregular to find an ACF peak, it seamlessly falls back to the configured baseline window size.
-         ┌──────────────────────────┐
-         │  Layer 0 — IsolationForest│  One-Class engine
-         │  + DetectionMetadata      │  Fit on class-0 only
+         │  Layer 0 — Nano Filter   │  GPT-5-Nano / Gemini-3.1-Lite
+         │  (Stat + LLM Hybrid)     │  Configurable Engine (isolation/llm)
          └─────┬───────────┬────────┘
-       inlier  │           │outlier + DetectionMetadata
+       baseline│           │anomaly (escalate to L1)
                ▼           ▼
             OUTPUT   ┌──────────────────────────────────┐
-          (pred=0)   │  Layer 1 — Anti-FP Filter         │
-                     │  RoleCoordinator("temporal")      │
-                     │    ├─ assess_complexity → N       │
-                     │    ├─ spawn 1..5 DomainAgents     │
-                     │    ├─ read L0 math details        │
-                     │    └─ aggregate → SwarmConsensus  │
-                     │  RoleCoordinator("spatial")  → ⬤ │
-                     │  RoleCoordinator("profile")  → ⬤ │
-                     │  RoleCoordinator("context")  → ⬤ │
+          (pred=0)   │  Layer 1 — Cheap Domain Swarm    │
+                     │  Parallel Anti-FP Experts        │
+                     │  (GPT-5-Mini / Gemini-3-Flash)   │
                      └──────────┬───────────────────────┘
-                               ▼ list[SwarmConsensus]
-                    ┌──────────────────────────┐
-                    │  Layer 2 — Orchestrator   │
-                    │  Smart model, economic    │
-                    │  trade-off + consensus    │
-                    └──────────┬───────────────┘
-                               ▼
-                            OUTPUT → predictions_{stage}.txt
-                               │
-                    ┌──────────▼───────┐
-                    │  RAG (per-level) │  ChromaDB: reset between levels
-                    └──────────────────┘
+                                ▼
+                     ┌──────────────────────────┐
+                     │  Layer 2 — Smart Orchestr     │
+                     │  Final Economic Decision  │
+                     │  (GPT-5.4 / Gemini-3.1-Pro)│
+                     └──────────┬───────────────┘
+                                ▼
+                             OUTPUT → predictions_{stage}.txt
 ```
-
 
 ---
 
@@ -118,10 +89,10 @@ Each stage `i` undergoes the full Single-Pass logic. After the Fit, the pipeline
 
 The framework supports **switchable LLM backends** via a modular provider system.
 
-| Provider | Env Setting | Models |
-|----------|------------|--------|
-| **OpenAI** | `LLM_PROVIDER=openai` | `gpt-5-mini` (cheap), `gpt-5.2` (smart) |
-| **Google Gemini** | `LLM_PROVIDER=gemini` | `gemini-3-flash-preview` (cheap), `gemini-3.1-pro-preview` (smart) |
+| Provider | Env Setting | Nano (L0) | Cheap (L1) | Smart (L2) |
+|----------|------------|-----------|------------|------------|
+| **OpenAI** | `LLM_PROVIDER=openai` | `gpt-5-nano` | `gpt-5-mini` | `gpt-5.4` |
+| **Google Gemini** | `LLM_PROVIDER=gemini` | `gemini-3.1-flash-lite` | `gemini-3-flash` | `gemini-3.1-pro` |
 
 Switch providers by changing a single `.env` variable — no code changes needed.
 

@@ -93,14 +93,17 @@ def main() -> None:
 
     # ── Run pipeline ────────────────────────────────────────────────
     from pipeline import AdaptivePipeline
+    from manifest_manager import ManifestManager
 
     logger.info("  [Pipeline] Initializing Adaptive Multi-stage Pipeline...")
     pipeline = AdaptivePipeline()
     try:
+        manifest_manager = ManifestManager(args.manifest)
+
         stage_results = pipeline.run(
-            manifest_path=args.manifest, 
+            manager=manifest_manager,
             results_dir=results_dir,
-            target_stage=args.stage
+            run_id=run_timestamp,
         )
 
         c = Console()

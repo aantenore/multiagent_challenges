@@ -114,6 +114,7 @@ class AdaptivePipeline:
         stage_idx: int,
         stage: Stage,
         results_dir: Path | None = None,
+        run_id: str | None = None,
     ) -> list[PipelineResult]:
         """
         Execute a full pipeline stage: 
@@ -158,8 +159,9 @@ class AdaptivePipeline:
                 manifest_entries=all_entries,
             )
 
-            train_session_id = generate_session_id()
-            set_current_session_id(train_session_id)
+            # Specific ID for RAG Population Phase
+            rag_session_id = generate_session_id(prefix=f"train_{run_id or 'default'}_{stage.name}")
+            set_current_session_id(rag_session_id)
             
             if self._rag.is_enabled:
                 with Progress(
@@ -201,8 +203,10 @@ class AdaptivePipeline:
                 )
                 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                    # Specific ID for Sanity Check Phase (predict_train)
+                    sanity_session_id = generate_session_id(prefix=f"predict_train_{run_id or 'default'}_{stage.name}")
                     future_to_eid = {
-                        executor.submit(self._process_entity, dossier, coordinators, session_id=train_session_id): eid 
+                        executor.submit(self._process_entity, dossier, coordinators, session_id=sanity_session_id): eid 
                         for eid, dossier in train_dossiers.items()
                     }
                     
@@ -245,7 +249,8 @@ class AdaptivePipeline:
                 manifest_entries=eval_sources,
             )
 
-        eval_session_id = generate_session_id()
+        # Specific ID for Evaluation Phase (predict_eval)
+        eval_session_id = generate_session_id(prefix=f"predict_eval_{run_id or 'default'}_{stage.name}")
         set_current_session_id(eval_session_id)
         
         eval_results: list[PipelineResult] = []

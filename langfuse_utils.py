@@ -19,10 +19,13 @@ import threading
 
 _local = threading.local()
 
-def generate_session_id():
-    """Generate a unique session ID using TEAM_NAME and ULID."""
+def generate_session_id(prefix: str | None = None):
+    """Generate a unique session ID, optionally with a prefix."""
     team_name = os.getenv("TEAM_NAME", "A(CC)I-Tua")
-    return f"{team_name}-{ulid.new().str}"
+    suffix = ulid.new().str
+    if prefix:
+        return f"{prefix}-{suffix}"
+    return f"{team_name}-{suffix}"
 
 def set_current_session_id(session_id: str):
     _local.session_id = session_id
