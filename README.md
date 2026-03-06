@@ -43,6 +43,10 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
                      └──────────┬───────────────┘
                                 ▼
                              OUTPUT → predictions_{stage}.txt
+                                │
+                     ┌──────────▼───────┐
+                     │  RAG (per-level) │  ChromaDB: reset between levels
+                     └──────────────────┘
 ```
 
 ---

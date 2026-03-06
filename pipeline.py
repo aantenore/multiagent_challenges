@@ -62,8 +62,9 @@ class AdaptivePipeline:
 
     def run(
         self,
-        manifest_path: str,
-        results_dir: Path,
+        manager: ManifestManager,
+        results_dir: Path | None = None,
+        run_id: str | None = None,
         target_stage: str | None = None,
     ) -> dict[str, list[PipelineResult]]:
         """Execute the full N-stage pipeline or a specific stage.
@@ -80,7 +81,6 @@ class AdaptivePipeline:
             f"threshold={self._cfg.swarm_complexity_threshold}"
         )
 
-        manager = ManifestManager(manifest_path)
         manager.load()
         stages = manager.stages
 
@@ -97,7 +97,7 @@ class AdaptivePipeline:
                 continue
             
             console.rule(f"[bold yellow]Stage {idx + 1}/{len(stages)}: {stage.name}")
-            results = self._run_stage(manager, idx, stage, results_dir=results_dir)
+            results = self._run_stage(manager, idx, stage, results_dir=results_dir, run_id=run_id)
             all_results[stage.name] = results
 
         return all_results
