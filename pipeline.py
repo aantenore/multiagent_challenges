@@ -213,7 +213,7 @@ class AdaptivePipeline:
                             progress.advance(sanity_task)
                         except Exception as exc:
                             eid = future_to_eid[future]
-                            logger.error(f"  [ERROR] Sanity test failed for {eid}: {exc}")
+                            raise RuntimeError(f"Critical Sanity test failure for {eid}: {exc}") from exc
 
             # Reporting for Sanity phase
             train_out_file = f"train_predictions_{stage.name}.txt"
@@ -275,7 +275,7 @@ class AdaptivePipeline:
                         progress.advance(eval_task)
                     except Exception as exc:
                         eid = future_to_eid[future]
-                        logger.error(f"  [ERROR] Critical error processing {eid}: {exc}")
+                        raise RuntimeError(f"Critical error processing {eid}: {exc}") from exc
 
         # ── 4. Finalisation & Metrics ──────────────────────────────────────
         stage_duration = time.time() - stage_start_time

@@ -19,6 +19,7 @@ from typing import Any
 
 from agent_base import BaseAgent
 from models import AgentVerdict, EntityDossier, ManifestEntry, SwarmConsensus
+from langfuse_utils import get_current_session_id, set_current_session_id
 from prompt_loader import load_prompt
 from settings import get_settings
 
