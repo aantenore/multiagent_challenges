@@ -112,39 +112,42 @@ class AdaptivePipeline:
         stage: Stage,
         results_dir: Path | None = None,
     ) -> list[PipelineResult]:
-        """Process one stage: train on THIS level's data only, then evaluate.
-        
-        LA REGOLA D'ORO PER IL LAYER 0:
-        Per ogni stage, l'Isolation Forest deve essere istanziato a nuovo e il suo 
-        metodo .fit() deve essere chiamato ESATTAMENTE UNA VOLTA sul Training Set.
         """
+        Execute a full pipeline stage: 
+        1. Context Reset: Clean RAG and L0 models for isolation between levels.
+        2. Training/Baseline FIT: Train the Anomaly Engine on training dossiers.
+        3. RAG Population: Seed memory with 'Normality' examples labeled by L0.
+        4. Parallel Evaluation: Process appraisal entities concurrently across swarms.
+        """
+        import time
+        stage_start_time = time.time()
+        
         # ── 1. Reset & Setup ────────────────────────────────────────────────
         if self._rag.is_enabled:
             self._rag.reset()
-            logger.info("  RAG reset for stage '%s'", stage.name)
+            logger.info("  [RAG] Memory reset for Level %d (%s)", stage_idx + 1, stage.name)
 
         self._router = OneClassRouter()
-        logger.info("  Layer 0 instance reset for stage '%s'", stage.name)
+        logger.info("  [L0] Anomaly Engine (IsolationForest) reset for Level %d", stage_idx + 1)
 
-        # ── 2. Training Phase (LA FASE DI FIT - Single-Pass) ────────────────
+        # ── 2. Training Phase (FIT) ─────────────────────────────────────────
         train_sources = stage.training_sources
         coordinators = []
         
         if train_sources:
-            console.print(f"  Training stage: [bold]{len(train_sources)}[/] sources")
+            logger.info("  [Data] Loading %d training sources for baseline creation...", len(train_sources))
             train_builder = DossierBuilder.from_entries(train_sources, manager.base_dir)
             train_dossiers = train_builder.build_all()
 
             for dossier in train_dossiers.values():
                 dossier.features = self._extractor.extract(dossier)
 
-            # >>> MOMENTO CRITICO: Esegui L0.build_baselines (FIT) <<<
-            # The Isolation Forest is instantiated and trained exactly ONCE per level.
-            console.print("  [blue]ℹ Layer 0: Building Baselines (Single-Pass)...[/]")
+            # Execution of L0 Training
+            logger.info("  [L0] Training Anomaly Engine on %d entities...", len(train_dossiers))
             self._router.build_baselines(train_dossiers)
 
             # ── RAG Baseline Population Phase ───────────────────────────────
-            # Store ALL training dossiers as certified "Normality" examples.
+            # Dynamically labeled population: inliers vs outliers within the training set.
             all_entries = train_sources + (stage.evaluation_sources or [])
             roles_to_swarm = {e.role for e in all_entries if e.role in {"temporal", "spatial"}}
             coordinators = SwarmFactory.create_coordinators(
@@ -162,42 +165,54 @@ class AdaptivePipeline:
                     console=console,
                 ) as progress:
                     rag_task = progress.add_task(
-                        f"  {stage.name}: Populating RAG Baseline (L0 Predictions)…", total=len(train_dossiers)
+                        f"  [RAG] Populating L{stage_idx} Memory…", total=len(train_dossiers)
                     )
 
                     for eid, dossier in train_dossiers.items():
-                        # Use L0 to decide the label for RAG storage
+                        # L0 acts as the first filter to decide how to store the case
                         l0_v, _, meta = self._router.to_verdict(eid, dossier)
                         is_outlier = meta.is_anomalous
                         prediction = 1 if is_outlier else 0
                         
                         summary = self._rag.summarise_dossier(dossier)
                         if prediction == 0:
-                            rag_content = f"[BASELINE][Decision=0] {summary}\nDescription: Confirmed stable baseline (L0 inlier)."
+                            rag_content = f"[BASELINE][Inlier] {summary}\nStatus: Verified stability via L0."
                         else:
-                            rag_content = f"[TRICKY_BASELINE][Decision=1] {summary}\nReasoning: L0 outlier within training set. {meta.report}"
+                            rag_content = f"[TRICKY_BASELINE][Outlier] {summary}\nReasoning: L0 flagged as internal anomaly. {meta.report}"
                         
                         self._rag.add_case(eid, rag_content, label=prediction)
                         progress.advance(rag_task)
             
-            # ── RAG Edge-Case Refinement (Optional) ─────────────────────────
-            # If any training entity is an outlier to its own group, we can flag it as [TRICKY_BASELINE]
-
-            # SANITY CHECK: Predict on Train Set
+            # ── Sanity Check (Parallel) ─────────────────────────────────────
+            logger.info("  [Pipeline] Running Sanity Check on Training Set...")
             train_results: list[PipelineResult] = []
+            import concurrent.futures
+
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
                 console=console,
             ) as progress:
                 sanity_task = progress.add_task(
-                    f"  {stage.name}: Sanity Predict (Train Set)…", total=len(train_dossiers)
+                    f"  [Sanity] Level {stage_idx} Self-Test…", total=len(train_dossiers)
                 )
-                for dossier in train_dossiers.values():
-                    result = self._process_entity(dossier, coordinators, session_id=train_session_id)
-                    train_results.append(result)
-                    progress.advance(sanity_task)
+                
+                with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                    future_to_eid = {
+                        executor.submit(self._process_entity, dossier, coordinators, session_id=train_session_id): eid 
+                        for eid, dossier in train_dossiers.items()
+                    }
+                    
+                    for future in concurrent.futures.as_completed(future_to_eid):
+                        try:
+                            result = future.result()
+                            train_results.append(result)
+                            progress.advance(sanity_task)
+                        except Exception as exc:
+                            eid = future_to_eid[future]
+                            logger.error(f"  [ERROR] Sanity test failed for {eid}: {exc}")
 
+            # Reporting for Sanity phase
             train_out_file = f"train_predictions_{stage.name}.txt"
             train_out_path = results_dir / train_out_file if results_dir else Path(train_out_file)
             write_predictions(train_results, train_out_path)
@@ -205,18 +220,15 @@ class AdaptivePipeline:
             audit_out_file = f"train_audit_log_{stage.name}.json"
             audit_out_path = results_dir / audit_out_file if results_dir else Path(audit_out_file)
             write_audit_log(train_results, audit_out_path)
-            
-            console.print(f"  [blue]ℹ Train stage complete. RAG warmed up and L0 model established.[/]")
+            logger.info("  [Output] Sanity report saved to %s", train_out_path)
 
-        # ── 3. Evaluation Phase (ASSOLUTAMENTE NO FIT) ──────────────────────
+        # ── 3. Evaluation Phase (Parallel) ──────────────────────────────────
         eval_sources = stage.evaluation_sources
         if not eval_sources:
-            console.print("  [yellow]⚠ No evaluation sources — skipping[/]")
+            logger.warning("  [Pipeline] No evaluation sources for stage '%s'", stage.name)
             return []
 
-        console.print(f"  Evaluation phase: [bold]{len(eval_sources)}[/] sources")
-        logger.info("INFO: Layer 0 PREDICTING on Evaluation Set (Model Locked)")
-        
+        logger.info("  [Data] Building evaluation dossiers for %d entities...", len(eval_sources))
         eval_builder = DossierBuilder.from_entries(eval_sources, manager.base_dir)
         eval_dossiers = eval_builder.build_all()
 
@@ -224,31 +236,49 @@ class AdaptivePipeline:
             dossier.features = self._extractor.extract(dossier)
 
         if not coordinators:
-            all_entries = eval_sources
-            roles_to_swarm = {e.role for e in all_entries if e.role in {"temporal", "spatial"}}
+            roles_to_swarm = {e.role for e in eval_sources if e.role in {"temporal", "spatial"}}
             coordinators = SwarmFactory.create_coordinators(
                 roles=roles_to_swarm,
-                manifest_entries=all_entries,
+                manifest_entries=eval_sources,
             )
 
         eval_session_id = generate_session_id()
         set_current_session_id(eval_session_id)
         
         eval_results: list[PipelineResult] = []
+        import concurrent.futures
+
+        logger.info("  [Orchestration] Processing Evaluation Set in PARALLEL (5 workers)...")
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
             eval_task = progress.add_task(
-                f"  {stage.name}: Predicting Evaluation Set…", total=len(eval_dossiers)
+                f"  [Eval] Level {stage_idx} Production Appraisal…", total=len(eval_dossiers)
             )
-            for dossier in eval_dossiers.values():
-                result = self._process_entity(dossier, coordinators, session_id=eval_session_id)
-                eval_results.append(result)
-                progress.advance(eval_task)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                # Map dossiers to the process function
+                future_to_eid = {
+                    executor.submit(self._process_entity, dossier, coordinators, session_id=eval_session_id): eid 
+                    for eid, dossier in eval_dossiers.items()
+                }
+                
+                for future in concurrent.futures.as_completed(future_to_eid):
+                    try:
+                        result = future.result()
+                        eval_results.append(result)
+                        progress.advance(eval_task)
+                    except Exception as exc:
+                        eid = future_to_eid[future]
+                        logger.error(f"  [ERROR] Critical error processing {eid}: {exc}")
 
-        # ── 4. Write eval output & audit ───────────────────────────────────
+        # ── 4. Finalisation & Metrics ──────────────────────────────────────
+        stage_duration = time.time() - stage_start_time
+        logger.info("  [Metric] Stage '%s' completed in %.2fs (avg: %.2fs/entity)", 
+                    stage.name, stage_duration, stage_duration / max(len(eval_dossiers), 1))
+
         out_file = stage.output_file or f"predictions_{stage.name}.txt"
         out_path = results_dir / out_file if results_dir else Path(out_file)
         write_predictions(eval_results, out_path)
@@ -256,6 +286,7 @@ class AdaptivePipeline:
         audit_file = f"audit_log_{stage.name}.json"
         audit_path = results_dir / audit_file if results_dir else Path(audit_file)
         write_audit_log(eval_results, audit_path)
+        logger.info("  [Output] Production results saved to %s", out_path)
 
         return eval_results
 
@@ -268,27 +299,40 @@ class AdaptivePipeline:
         force_escalation: bool = False,
         session_id: str | None = None,
     ) -> PipelineResult:
-        """Process a single entity through L0 → L1 coordinators → L2."""
+        """
+        Main decision path for a single entity:
+        1. Layer 0 (IsolationForest): Fast-path for confirmed inliers (Decision 0).
+        2. Swarm RAG (Memory): Retrieve similar historical cases.
+        3. Layer 1 (Coordinators): Parallel domain-specific swarms for Temporal/Spatial.
+        4. Layer 2 (Orchestrator): Holistic review of swarm verdicts + Profile + Context.
+        """
+        import time
+        start_t = time.time()
         eid = dossier.entity_id
         verdicts = []
 
-        # Layer 0 — One-Class Anomaly Engine (SVM + IsolationForest)
+        # Layer 0 — Anomaly Engine
         l0_verdict, complexity, detection_meta = self._router.to_verdict(eid, dossier)
+        
+        # Expressive reasoning for L0 in Audit
+        if not detection_meta.is_anomalous:
+            l0_verdict.reasoning = f"Baseline verified. Anomaly score {detection_meta.avg_conf:.3f} is within normal thresholds."
+
         if l0_verdict is not None and not force_escalation:
             verdicts.append(l0_verdict)
             return PipelineResult(
                 entity_id=eid,
                 session_id=session_id,
                 final_prediction=l0_verdict.prediction,
-                layer_decided="L0_OneClassRouter",
+                layer_decided="Layer_0_FastPath",
                 verdicts=verdicts,
+                metadata={"total_time_ms": int((time.time() - start_t) * 1000)}
             )
         
-        # In case of force_escalation, we might still want to record L0's opinion but proceed
         if l0_verdict and force_escalation:
             verdicts.append(l0_verdict)
 
-        # Layer 1 — Dynamic Swarm via Coordinators
+        # Layer 1 — Domain Experts
         rag_examples = []
         if self._rag.is_enabled:
             summary = self._rag.summarise_dossier(dossier)
@@ -311,8 +355,12 @@ class AdaptivePipeline:
             entity_id=eid,
             session_id=session_id,
             final_prediction=final_verdict.prediction,
-            layer_decided="L2_GlobalOrchestrator",
+            layer_decided="Layer_2_FullConsensus",
             verdicts=verdicts,
+            metadata={
+                "total_time_ms": int((time.time() - start_t) * 1000),
+                "l0_diagnostics": detection_meta.report if detection_meta else "N/A"
+            }
         )
 
     # ── Helpers ─────────────────────────────────────────────────────────

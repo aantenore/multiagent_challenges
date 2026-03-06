@@ -41,30 +41,38 @@ class DomainAgent(BaseAgent):
         rag_examples: list[dict],
         l0_report: str = "",
     ) -> str:
-        # Select the data slice relevant to this agent's role
+        """
+        Construct a context-rich prompt for the domain expert.
+        Includes:
+        - Domain-specific data slice (Temporal/Spatial/etc.)
+        - Semantic column descriptions from manifest metadata.
+        - L0 Anomaly Report (mathematical signal).
+        - RAG Memory (few-shot historical examples).
+        """
+        # Select the data slice relevant to this agent's role (e.g., last 10 events)
         data_slice = self._select_slice(dossier)
         rag_section = self._format_rag(rag_examples)
 
-        # Build semantic context from manifest metadata
+        # Build semantic context from manifest metadata to ground the LLM
         sem_section = ""
         if self._semantic:
             desc = self._semantic.get("description", "")
             cols = self._semantic.get("columns", {})
             if desc or cols:
-                sem_section = f"### Dataset Description\n{desc}\n\n"
+                sem_section = f"### Dataset Context — Understanding the Domain\n{desc}\n\n"
             if cols:
                 col_lines = "\n".join(f"- **{k}**: {v}" for k, v in cols.items())
-                sem_section += f"### Column Definitions\n{col_lines}\n\n"
+                sem_section += f"### Feature Definitions\n{col_lines}\n\n"
 
-        # L0 anomaly report section
+        # Mathematical detection report from Layer 0
         l0_section = ""
         if l0_report:
             l0_section = (
-                f"### L0 Anomaly Report (Mathematical Detection)\n"
+                f"### Layer 0 Assessment — Automated Detection\n"
                 f"{l0_report}\n\n"
             )
 
-        # Load external template; use inline fallback if missing
+        # Load external template for standardized roleplay
         template = load_prompt("domain_agent")
         if template:
             return template.format(
@@ -79,32 +87,28 @@ class DomainAgent(BaseAgent):
                 l0_section=l0_section,
             )
 
-        # Inline fallback — Anti-False-Positive Filter
+        # Inline fallback — Collaborative Verification Agent
         return (
-            f"## Task — Anti-False-Positive Filter\n"
-            f"The Layer 0 One-Class engine (SVM + IsolationForest) has "
-            f"detected a **mathematical anomaly** for entity '{dossier.entity_id}'.\n\n"
-            f"Your job is NOT to discover anomalies in numbers (L0 already did that). "
-            f"Your job is to act as a **contextual false-positive filter**:\n"
-            f"- Read the context (persona, profile, lifestyle) and the {self.role} data.\n"
-            f"- Decide if the mathematical deviation is **justified** by the person's "
-            f"life context (e.g. seasonal change, known condition, lifestyle choice).\n"
-            f"- If justified → output 0 (standard monitoring, false positive from L0).\n"
-            f"- If NOT justified → output 1 (confirm preventive support).\n\n"
+            f"## Case Review — Entity '{dossier.entity_id}'\n"
+            f"You are a specialized auditor for the '{self.role}' domain. "
+            f"An automated anomaly engine (Level 0) has flagged this file.\n\n"
+            f"### Mission Objectives\n"
+            f"1. Contextual Verification: Analyze if the person's profile justifies the technical outlier.\n"
+            f"2. Risk Assessment: Determine if the confirmed anomaly warrants preventive support (Decision=1).\n"
+            f"3. False Positive Filtering: Identify if this is a 'Normal Deviation' (Decision=0).\n\n"
             f"{l0_section}"
             f"{sem_section}"
-            f"### {self.role.title()} Data\n"
+            f"### {self.role.upper()} EVIDENCE\n"
             f"```json\n{data_slice}\n```\n\n"
-            f"### Profile Summary\n"
+            f"### SOCIO-DEMOGRAPHIC PROFILE\n"
             f"```json\n{json.dumps(dossier.profile_data, default=str, indent=2)}\n```\n\n"
-            f"### Context\n{dossier.context_data[:2000] if dossier.context_data else 'N/A'}\n\n"
+            f"### ADDITIONAL BIOGRAPHIC CONTEXT\n{dossier.context_data[:2000] if dossier.context_data else 'N/A'}\n\n"
             f"{rag_section}"
-            f"### Instructions\n"
-            f"- The L0 engine flagged this entity as outlier. Check if it is truly abnormal.\n"
-            f"- False Negatives are WORSE than False Positives.\n"
-            f"- But don't blindly confirm: if life context explains the deviation, output 0.\n\n"
-            f"Respond with JSON: "
-            f'{{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}'
+            f"### AUDIT GUIDELINES\n"
+            f"- Evaluate based on clinical/lifestyle plausibility, not just numbers.\n"
+            f"- Error cost: Skipping a critical case (1) is 2x more expensive than a false alarm (0).\n\n"
+            f"Respond with JSON format: "
+            f'{{{{"prediction": 0|1, "confidence": float, "reasoning": "string"}}}}'
         )
 
     def _select_slice(self, dossier: EntityDossier) -> str:

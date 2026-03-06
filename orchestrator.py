@@ -38,7 +38,11 @@ class GlobalOrchestrator(BaseAgent):
         swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict],
         rag_examples: list[dict] | None = None,
     ) -> AgentVerdict:
-        """Synthesise swarm consensus into a final verdict."""
+        """
+        Synthesize swarm consensus, historical RAG memory, and raw profile data 
+        into a final economic decision.
+        """
+        logger.info("  [L2] Orchestrating final decision for entity %s...", dossier.entity_id)
         return self.analyze(dossier, rag_examples, _swarm_verdicts=swarm_verdicts)
 
     def analyze(  # type: ignore[override]
@@ -48,7 +52,10 @@ class GlobalOrchestrator(BaseAgent):
         *,
         _swarm_verdicts: list[SwarmConsensus] | list[AgentVerdict] | None = None,
     ) -> AgentVerdict:
-        """Override to inject swarm verdicts into the prompt."""
+        """
+        Specialized analysis for L2: inject swarm results into the prompt state
+        before calling the LLM provider.
+        """
         self._pending_swarm = _swarm_verdicts or []
         return super().analyze(dossier, rag_examples)
 
@@ -57,9 +64,14 @@ class GlobalOrchestrator(BaseAgent):
         dossier: EntityDossier,
         rag_examples: list[dict],
     ) -> str:
+        """
+        Construct the Global Orchestrator prompt.
+        Includes an economic framework (FP vs FN costs) to bridge the gap 
+        between AI prediction and business risk.
+        """
         swarm = self._pending_swarm
 
-        # Format verdicts — use consensus format if available
+        # Format verdicts — inclusion of role consensus metrics (agreement/complexity)
         verdict_lines = self._format_verdicts(swarm)
 
         rag_section = ""
@@ -68,9 +80,9 @@ class GlobalOrchestrator(BaseAgent):
                 f"  Case: predicted={ex.get('predicted_label')} — {ex.get('summary', '')}"
                 for ex in rag_examples
             )
-            rag_section = f"### Past Error Cases\n{cases}\n\n"
+            rag_section = f"### Historical Memory — Similar Scenarios\n{cases}\n\n"
 
-        # Load external template; use inline fallback if missing
+        # Load external template for standardized reasoning
         template = load_prompt("orchestrator")
         if template:
             return template.format(
@@ -85,20 +97,24 @@ class GlobalOrchestrator(BaseAgent):
                 fn_ratio=self._fn_cost / self._fp_cost,
             )
 
-        # Inline fallback
+        # Inline fallback — Chief Economic Orchestrator
         return (
-            f"## Global Decision for Entity '{dossier.entity_id}'\n\n"
-            f"### Swarm Consensus Verdicts\n{verdict_lines}\n\n"
-            f"### Entity Profile\n"
+            f"## Case Triage — Global Orchestration for '{dossier.entity_id}'\n\n"
+            f"You are the senior decision maker. Your goal is to review findings from "
+            f"multiple domain-specific swarms and issue a final 'Preventive Support' verdict.\n\n"
+            f"### Domain Expert Verdicts\n{verdict_lines}\n\n"
+            f"### Entity Profile & Identity\n"
             f"```json\n{json.dumps(dossier.profile_data, default=str, indent=2)}\n```\n\n"
-            f"### Context\n{dossier.context_data[:2000] if dossier.context_data else 'N/A'}\n\n"
-            f"### Engineered Features\n"
+            f"### Biographic Context\n{dossier.context_data[:2000] if dossier.context_data else 'N/A'}\n\n"
+            f"### Statistical Indicators (L0 Extraction)\n"
             f"```json\n{json.dumps(dossier.features, indent=2)}\n```\n\n"
             f"{rag_section}"
-            f"### Economic Framework\n"
-            f"- FP cost: {self._fp_cost}, FN cost: {self._fn_cost}\n\n"
-            f"Respond with JSON: "
-            f'{{{{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}}}'
+            f"### Decision Framework — Economic Trade-offs\n"
+            f"- False Positive Cost (FP): {self._fp_cost}\n"
+            f"- False Negative Cost (FN): {self._fn_cost}\n"
+            f"- Risk Bias: Missing a case (FN) is {self._fn_cost / self._fp_cost}x more impactful.\n\n"
+            f"Respond with JSON format: "
+            f'{{{{"prediction": 0|1, "confidence": float, "reasoning": "string"}}}}'
         )
 
     @staticmethod

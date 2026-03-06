@@ -65,31 +65,36 @@ def main() -> None:
     console_handler = RichHandler(rich_tracebacks=True, console=Console(stderr=True))
     console_handler.setLevel(getattr(logging, args.log_level))
 
-    # Actions file is INFO for a clean, expressive flow
+    # [Expressive Flow] Actions file captures high-level narrative
     actions_handler = logging.FileHandler(actions_file, encoding="utf-8")
     actions_handler.setLevel(logging.INFO)
     actions_handler.setFormatter(
-        logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
+        logging.Formatter("[%(asctime)s][%(levelname)7s] %(message)s")
     )
 
-    # Troubleshoot file is ALWAYS DEBUG for deep inspection
+    # [Deep Audit] Troubleshoot file captures the full trace with session IDs
     troubleshoot_handler = logging.FileHandler(troubleshoot_file, encoding="utf-8")
     troubleshoot_handler.setLevel(logging.DEBUG)
     troubleshoot_handler.setFormatter(
-        logging.Formatter("[%(asctime)s][%(levelname)-7s][%(name)s] %(message)s")
+        logging.Formatter("[%(asctime)s][%(levelname)-7s][%(name)s] [%(process)d] %(message)s")
     )
 
-    # Re-apply BasicConfig
+    # Root Logger Configuration
     logging.getLogger().handlers.clear()
     logging.basicConfig(
-        level=logging.DEBUG,  # Root logger must be DEBUG to feed the troubleshoot handler
+        level=logging.DEBUG,  # Feed all handlers; filters happen at handler level
         handlers=[console_handler, actions_handler, troubleshoot_handler],
     )
-    logging.info("Logs saved: %s (flow) and %s (debug)", actions_file.name, troubleshoot_file.name)
+    
+    logger = logging.getLogger("MirrorMain")
+    logger.info("  [System] Run ID: %s", run_timestamp)
+    logger.info("  [Output] Logs: %s (Standard) | %s (Deep Debug)", actions_file, troubleshoot_file)
+    logger.info("  [Output] Results will be saved in %s", results_dir)
 
     # ── Run pipeline ────────────────────────────────────────────────
     from pipeline import AdaptivePipeline
 
+    logger.info("  [Pipeline] Initializing Adaptive Multilevel Pipeline...")
     pipeline = AdaptivePipeline()
     try:
         stage_results = pipeline.run(
@@ -99,19 +104,19 @@ def main() -> None:
         )
 
         c = Console()
+        c.print("\n[bold green]─ Stage Summary ──────────────────────────────────[/]")
         for stage_name, results in stage_results.items():
             flagged = sum(1 for r in results if r.final_prediction == 1)
+            secure = len(results) - flagged
             c.print(
-                f"  [bold]{stage_name}:[/] {flagged}/{len(results)} flagged"
+                f"  ● [bold]{stage_name:15}:[/] Total {len(results):2} | [green]Secure: {secure:2}[/] | [red]Flagged: {flagged:2}[/]"
             )
-        c.print("\n[bold green]All stages complete.[/]")
-        
-        # No flush needed per user request
-        pass
+        c.print("[bold green]──────────────────────────────────────────────────[/]")
+        c.print(f"[bold green]Mission accomplished. Check {results_dir} for details.[/]")
 
     except Exception as exc:
-        Console().print(f"[bold red]Pipeline failed:[/] {exc}")
-        logging.exception("Pipeline failure")
+        Console().print(f"[bold red]Critical Pipeline Failure:[/] {exc}")
+        logging.exception("Mirror Pipeline crashed during execution")
         sys.exit(1)
 
 
