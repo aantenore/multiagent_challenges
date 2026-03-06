@@ -202,7 +202,7 @@ class AdaptivePipeline:
                     f"  [Sanity] Stage {stage_idx + 1} Self-Test…", total=len(train_dossiers)
                 )
                 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                     # Specific ID for Sanity Check Phase (predict_train)
                     sanity_session_id = generate_session_id(prefix=f"predict_train_{run_id or 'default'}_{stage.name}")
                     future_to_eid = {
@@ -256,7 +256,7 @@ class AdaptivePipeline:
         eval_results: list[PipelineResult] = []
         import concurrent.futures
 
-        logger.info("  [Orchestration] Processing Evaluation Set in PARALLEL (5 workers)...")
+        logger.info("  [Orchestration] Processing Evaluation Set in PARALLEL (10 workers)...")
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -266,7 +266,7 @@ class AdaptivePipeline:
                 f"  [Eval] Stage {stage_idx + 1} Production Appraisal…", total=len(eval_dossiers)
             )
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 # Map dossiers to the process function
                 future_to_eid = {
                     executor.submit(self._process_entity, dossier, coordinators, session_id=eval_session_id): eid 
