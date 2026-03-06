@@ -109,14 +109,22 @@ def main() -> None:
         )
 
         c = Console()
-        c.print("\n[bold green]─ Stage Summary ──────────────────────────────────[/]")
-        for stage_name, results in stage_results.items():
-            flagged = sum(1 for r in results if r.final_prediction == 1)
-            secure = len(results) - flagged
-            c.print(
-                f"  ● [bold]{stage_name:15}:[/] Total {len(results):2} | [green]Secure: {secure:2}[/] | [red]Flagged: {flagged:2}[/]"
-            )
-        c.print("[bold green]──────────────────────────────────────────────────[/]")
+        c.print("\n[bold green]─ Stage Summary ───────────────────────────────────[/]")
+        for stage_name, results_dict in stage_results.items():
+            # Evaluation Stats
+            eval_res = results_dict.get("eval", [])
+            e_flagged = sum(1 for r in eval_res if r.final_prediction == 1)
+            e_secure = len(eval_res) - e_flagged
+
+            # Sanity Check Stats
+            sanity_res = results_dict.get("sanity", [])
+            s_flagged = sum(1 for r in sanity_res if r.final_prediction == 1)
+            s_secure = len(sanity_res) - s_flagged
+
+            c.print(f"  ● [bold]{stage_name:10}[/]")
+            c.print(f"    [blue]↳ Sanity:[/] Total {len(sanity_res):2} | [green]Secure: {s_secure:2}[/] | [red]Flagged: {s_flagged:2}[/]")
+            c.print(f"    [blue]↳ Eval  :[/] Total {len(eval_res):2} | [green]Secure: {e_secure:2}[/] | [red]Flagged: {e_flagged:2}[/]")
+        c.print("[bold green]───────────────────────────────────────────────────[/]")
         c.print(f"[bold green]Mission accomplished. Check {results_dir} for details.[/]")
 
     except Exception as exc:

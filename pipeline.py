@@ -75,7 +75,7 @@ class AdaptivePipeline:
             console.print(f"[bold red]Target stage '{target_stage}' not found in manifest.[/]")
             return {}
 
-        all_results: dict[str, list[PipelineResult]] = {}
+        all_results: dict[str, dict[str, list[PipelineResult]]] = {}
         for idx, stage in enumerate(stages):
             if target_stage and stage.name != target_stage:
                 continue
@@ -96,8 +96,9 @@ class AdaptivePipeline:
         stage: Stage,
         results_dir: Path | None = None,
         run_id: str | None = None,
-    ) -> list[PipelineResult]:
-        """Execute a full pipeline stage."""
+    ) -> dict[str, list[PipelineResult]]:
+        """Execute a full pipeline stage. 
+        Returns a dict containing 'sanity' and 'eval' results."""
         stage_start_time = time.time()
         
         # ── 1. Initialization ───────────────────────────────────────────────
@@ -187,7 +188,10 @@ class AdaptivePipeline:
         audit_path = results_dir / audit_file if results_dir else Path(audit_file)
         write_audit_log(eval_results, audit_path)
         
-        return eval_results
+        return {
+            "sanity": train_results if 'train_results' in locals() else [],
+            "eval": eval_results
+        }
 
     # ── Parallel execution engine ───────────────────────────────────────
 
