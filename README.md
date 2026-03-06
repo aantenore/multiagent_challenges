@@ -21,7 +21,7 @@ The system ingests heterogeneous data described by a `manifest.json`, processes 
                        ▼
           ┌─────────────────────────┐
           │  Per-Level Training     │  train_i only
-          │  DossierBuilder         │
+          │  Dossier + IF Fit       │  (zero-cost math baseline)
           └────────────┬────────────┘
                        ▼
           ┌─────────────────────────┐
