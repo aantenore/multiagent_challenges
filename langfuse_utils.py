@@ -15,19 +15,22 @@ langfuse_client = Langfuse(
     host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 )
 
+import threading
+
+_local = threading.local()
+
 def generate_session_id():
     """Generate a unique session ID using TEAM_NAME and ULID."""
     team_name = os.getenv("TEAM_NAME", "A(CC)I-Tua")
     return f"{team_name}-{ulid.new().str}"
 
-_CURRENT_SESSION_ID = generate_session_id()
-
 def set_current_session_id(session_id: str):
-    global _CURRENT_SESSION_ID
-    _CURRENT_SESSION_ID = session_id
+    _local.session_id = session_id
 
 def get_current_session_id():
-    return _CURRENT_SESSION_ID
+    if not hasattr(_local, "session_id"):
+        _local.session_id = generate_session_id()
+    return _local.session_id
 
 def invoke_langchain(model, system_message, prompt, langfuse_handler):
     """Invoke LangChain with the given prompt and Langfuse handler."""

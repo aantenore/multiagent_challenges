@@ -8,9 +8,7 @@ Analyse the following **{role}** data for entity '{entity_id}' and decide whethe
 ```
 
 ### Profile Summary
-```json
-{profile_json}
-```
+{profile_summary}
 
 ### Context
 {context}

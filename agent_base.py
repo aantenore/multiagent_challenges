@@ -71,16 +71,21 @@ class BaseAgent(ABC):
         """Call the LLM and return a validated AgentVerdict."""
         rag_examples = rag_examples or []
         prompt = self._build_prompt(dossier, rag_examples, **kwargs)
+        from langfuse_utils import get_current_session_id
+        session_id = get_current_session_id()
+        
+        logger.debug("[%s] >>> PROMPT >>>\n%s", session_id, prompt)
 
         for attempt in range(1, self.max_retries + 1):
             try:
                 raw = self._call_llm(prompt)
+                logger.debug("[%s] <<< RESPONSE <<< \n%s", session_id, raw)
                 verdict = self._parse_verdict(raw)
                 return verdict
             except Exception as exc:
                 logger.warning(
-                    "[%s] attempt %d/%d failed: %s",
-                    self.name, attempt, self.max_retries, exc,
+                    "[%s][%s] attempt %d/%d failed: %s",
+                    session_id, self.name, attempt, self.max_retries, exc,
                 )
                 if attempt == self.max_retries:
                     logger.error(

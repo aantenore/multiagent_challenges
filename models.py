@@ -142,6 +142,45 @@ class EntityDossier(BaseModel):
         description="Engineered numeric features (populated by Layer 0)",
     )
 
+    def get_compact_profile(self) -> str:
+        """Return a compact, PII-free string representation of the profile."""
+        if not self.profile_data:
+            return "N/A"
+        
+        pii_keys = {"first_name", "last_name", "email", "phone", "phone_number", "address", "ssn"}
+        clean = {k: v for k, v in self.profile_data.items() if k not in pii_keys}
+        
+        # Format as a concise comma-separated list
+        parts = []
+        for k, v in sorted(clean.items()):
+            if isinstance(v, dict):
+                # Flatten small nested dicts like 'residence'
+                v_str = ", ".join(f"{sk}={sv}" for sk, sv in v.items() if sk not in pii_keys)
+                parts.append(f"{k}:({v_str})")
+            else:
+                parts.append(f"{k}={v}")
+        
+        return ", ".join(parts) if parts else "Empty Profile"
+
+    def get_filtered_features(self, top_n: int = 15, threshold: float = 0.1) -> dict[str, float]:
+        """Return only the most significant features (by magnitude)."""
+        if not self.features:
+            return {}
+            
+        # Sort by absolute value descending
+        sorted_feats = sorted(
+            self.features.items(),
+            key=lambda x: abs(x[1]),
+            reverse=True
+        )
+        
+        # Filter by threshold and take top N
+        filtered = {
+            k: v for k, v in sorted_feats[:top_n]
+            if abs(v) >= threshold
+        }
+        return filtered
+
 
 # ── Agent Verdict ───────────────────────────────────────────────────────
 

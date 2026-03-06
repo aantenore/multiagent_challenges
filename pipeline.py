@@ -143,42 +143,45 @@ class AdaptivePipeline:
             console.print("  [blue]ℹ Layer 0: Building Baselines (Single-Pass)...[/]")
             self._router.build_baselines(train_dossiers)
 
-            # ── RAG Warm-up Phase ───────────────────────────────────────────
-            # L0 predicts on its own training set to identify edge cases for RAG.
+            # ── RAG Baseline Population Phase ───────────────────────────────
+            # Store ALL training dossiers as certified "Normality" examples.
             all_entries = train_sources + (stage.evaluation_sources or [])
+            roles_to_swarm = {e.role for e in all_entries if e.role in {"temporal", "spatial"}}
             coordinators = SwarmFactory.create_coordinators(
-                roles={e.role for e in all_entries},
+                roles=roles_to_swarm,
                 manifest_entries=all_entries,
             )
 
             train_session_id = generate_session_id()
             set_current_session_id(train_session_id)
             
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-            ) as progress:
-                warmup_task = progress.add_task(
-                    f"  {stage.name}: RAG Warm-up Phase…", total=len(train_dossiers)
-                )
+            if self._rag.is_enabled:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                ) as progress:
+                    rag_task = progress.add_task(
+                        f"  {stage.name}: Populating RAG Baseline (L0 Predictions)…", total=len(train_dossiers)
+                    )
 
-                for eid, dossier in train_dossiers.items():
-                    # L0 identifies outliers in its own training set
-                    l0_v, _, _ = self._router.to_verdict(eid, dossier)
-                    
-                    if l0_v is None: # L0 escalated (edge case)
-                        logger.info("  [Warm-up] Inspecting RAG Edge Case: %s", eid)
-                        # Force escalation to L1/L2 to populate RAG
-                        result = self._process_entity(dossier, coordinators, force_escalation=True, session_id=train_session_id)
+                    for eid, dossier in train_dossiers.items():
+                        # Use L0 to decide the label for RAG storage
+                        l0_v, _, meta = self._router.to_verdict(eid, dossier)
+                        is_outlier = meta.is_anomalous
+                        prediction = 1 if is_outlier else 0
                         
-                        if self._rag.is_enabled:
-                            summary = self._rag.summarise_dossier(dossier)
-                            reasoning = result.verdicts[-1].reasoning if result.verdicts else "No reasoning."
-                            rag_content = f"[TRAINING_MEMO][Decision={result.final_prediction}] {summary}\nReasoning: {reasoning}"
-                            self._rag.add_case(eid, rag_content, label=result.final_prediction)
-                    
-                    progress.advance(warmup_task)
+                        summary = self._rag.summarise_dossier(dossier)
+                        if prediction == 0:
+                            rag_content = f"[BASELINE][Decision=0] {summary}\nDescription: Confirmed stable baseline (L0 inlier)."
+                        else:
+                            rag_content = f"[TRICKY_BASELINE][Decision=1] {summary}\nReasoning: L0 outlier within training set. {meta.report}"
+                        
+                        self._rag.add_case(eid, rag_content, label=prediction)
+                        progress.advance(rag_task)
+            
+            # ── RAG Edge-Case Refinement (Optional) ─────────────────────────
+            # If any training entity is an outlier to its own group, we can flag it as [TRICKY_BASELINE]
 
             # SANITY CHECK: Predict on Train Set
             train_results: list[PipelineResult] = []
@@ -222,8 +225,9 @@ class AdaptivePipeline:
 
         if not coordinators:
             all_entries = eval_sources
+            roles_to_swarm = {e.role for e in all_entries if e.role in {"temporal", "spatial"}}
             coordinators = SwarmFactory.create_coordinators(
-                roles={e.role for e in all_entries},
+                roles=roles_to_swarm,
                 manifest_entries=all_entries,
             )
 

@@ -149,22 +149,22 @@ class RAGStore:
     # ── Helpers ─────────────────────────────────────────────────────────
 
     def summarise_dossier(self, dossier) -> str:
-        """Create a compact text summary of a dossier for vectorisation."""
-        parts = [f"Entity: {dossier.entity_id}"]
-        if dossier.profile_data:
-            profile = dossier.profile_data
-            parts.append(
-                f"Profile: {profile.get('first_name', '')} {profile.get('last_name', '')}, "
-                f"job={profile.get('job', 'N/A')}, "
-                f"city={profile.get('residence_city', profile.get('residence', {}).get('city', 'N/A') if isinstance(profile.get('residence'), dict) else 'N/A')}"
-            )
-        if dossier.features:
-            feat_str = ", ".join(
-                f"{k}={v:.1f}" for k, v in sorted(dossier.features.items())
-            )
+        """Create a compact, PII-free text summary of a dossier for vectorisation."""
+        parts = [f"ID: {dossier.entity_id}"]
+        
+        # Use compact profile (PII-free)
+        parts.append(f"Profile: {dossier.get_compact_profile()}")
+        
+        # Only most significant features (top 8)
+        feats = dossier.get_filtered_features(top_n=8, threshold=0.1)
+        if feats:
+            feat_str = ", ".join(f"{k}={v:.1f}" for k, v in sorted(feats.items()))
             parts.append(f"Features: {feat_str}")
+        
+        # Very short context snippet
         if dossier.context_data:
-            parts.append(f"Context: {dossier.context_data[:300]}")
+            parts.append(f"Context: {dossier.context_data[:150]}...")
+            
         return " | ".join(parts)
 
     @property

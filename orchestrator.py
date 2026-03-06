@@ -76,9 +76,9 @@ class GlobalOrchestrator(BaseAgent):
             return template.format(
                 entity_id=dossier.entity_id,
                 verdict_lines=verdict_lines,
-                profile_json=json.dumps(dossier.profile_data, default=str, indent=2),
-                context=dossier.context_data[:2000] if dossier.context_data else "N/A",
-                features_json=json.dumps(dossier.features, indent=2),
+                profile_summary=dossier.get_compact_profile(),
+                context=dossier.context_data[:1500] if dossier.context_data else "N/A",
+                features_summary=json.dumps(dossier.get_filtered_features(top_n=12), indent=2),
                 rag_section=rag_section,
                 fp_cost=self._fp_cost,
                 fn_cost=self._fn_cost,

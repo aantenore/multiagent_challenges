@@ -4,16 +4,11 @@
 {verdict_lines}
 
 ### Entity Profile
-```json
-{profile_json}
-```
+{profile_summary}
 
-### Context
-{context}
-
-### Engineered Features
+### Key Engineered Features (Significant Deviations)
 ```json
-{features_json}
+{features_summary}
 ```
 
 {rag_section}
@@ -23,15 +18,14 @@
 - FN is {fn_ratio:.0f}× worse than FP.
 
 ### Instructions
-1. Each verdict above comes from a **Role Coordinator** that ran multiple expert agents. Pay attention to:
-   - **Agreement ratio** — how many agents within each role agree (higher = stronger signal).
-   - **Confidence** — the consensus confidence for that role.
-   - **Complexity** — higher complexity means the case is harder; weight these roles more carefully.
-2. Consider the asymmetric cost: err on the side of flagging (prediction=1) when uncertain.
-3. Look for cross-role consensus — if multiple roles flag concerns, the evidence is very strong.
-4. Even ONE strong signal (e.g., emergency visit, specialist consultation, sharp metric decline) should bias toward prediction=1.
-5. A role with low agreement but high complexity suggests genuine ambiguity — apply extra caution.
-6. **RAG Authority**: Historical cases with `label=0` are confirmed safe/healthy baselines. `label=1` or `[TRICKY_CASE_MISCLASSIFIED_AS_1]` means the entity requires preventive support despite possibly looking safe.
-7. Provide your final prediction.
+1. Each verdict above comes from a **Role Coordinator** that ran a swarm of expert agents for **Temporal** and **Spatial** data.
+2. **Direct Contextual Analysis**: Use the `Entity Profile` and `Context` (notes/personas) to determine if the findings from Temporal/Spatial are justified by the person's life situation:
+   - Does their job or residence city explain the GPS patterns?
+   - Does a known medical condition or lifestyle note explain the biometric/sleep trends?
+3. **Reconciliation**:
+   - If L1 signals an anomaly but Profile/Context justifies it → Predict 0.
+   - If L1 is uncertain (low agreement/confidence) but Profile/Context shows high risk → Predict 1.
+4. **Economic Decision**: FN is {fn_ratio:.0f}× worse than FP. Err on the side of flagging (prediction=1) if the profile doesn't clearly explain away the detected deviations.
+5. **RAG Authority**: Use historical cases to benchmark what "Normal" or "Tricky" looks like for this demographic.
 
-Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "..."}}
+Respond with JSON: {{"prediction": 0 or 1, "confidence": 0.0-1.0, "reasoning": "Detailed breakdown of why Profile/Context justifies or confirms the Temporal/Spatial signals."}}

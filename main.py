@@ -69,14 +69,14 @@ def main() -> None:
     actions_handler = logging.FileHandler(actions_file, encoding="utf-8")
     actions_handler.setLevel(logging.INFO)
     actions_handler.setFormatter(
-        logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
+        logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
     )
 
     # Troubleshoot file is ALWAYS DEBUG for deep inspection
     troubleshoot_handler = logging.FileHandler(troubleshoot_file, encoding="utf-8")
     troubleshoot_handler.setLevel(logging.DEBUG)
     troubleshoot_handler.setFormatter(
-        logging.Formatter("[%(asctime)s] %(name)s [%(levelname)s] %(message)s")
+        logging.Formatter("[%(asctime)s][%(levelname)-7s][%(name)s] %(message)s")
     )
 
     # Re-apply BasicConfig
